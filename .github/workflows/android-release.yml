@@ -47,6 +47,29 @@ jobs:
             echo "Android native project already exists"
           fi
 
+      - name: Patch react-native-camera build config
+        run: |
+          python3 - <<'PY'
+import pathlib, re
+for base in [pathlib.Path('mobile_native/android'), pathlib.Path('mobile/android')]:
+    app_build = base / 'app' / 'build.gradle'
+    if not app_build.exists():
+        continue
+    text = app_build.read_text()
+    if 'missingDimensionStrategy' in text and 'react-native-camera' in text:
+        continue
+    lines = text.splitlines()
+    out = []
+    inserted = False
+    for line in lines:
+        out.append(line)
+        if not inserted and re.match(r'^\s*defaultConfig\s*\{', line):
+            out.append("        missingDimensionStrategy 'react-native-camera', 'general'")
+            inserted = True
+    if inserted:
+        app_build.write_text('\n'.join(out) + '\n')
+PY
+
       - name: Decode Android keystore from secret
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
