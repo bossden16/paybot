@@ -2,6 +2,10 @@
   "name": "paybot-pos-terminal-mobile",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19.4",
+    "npm": ">=9"
+  },
   "description": "PayBot Virtual POS Terminal Mobile App for Android",
   "main": "index.js",
   "scripts": {
