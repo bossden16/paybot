@@ -10,6 +10,7 @@ jobs:
     name: Build release APK
     runs-on: ubuntu-latest
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       NODE_VERSION: '18'
       JAVA_VERSION: '17'
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
