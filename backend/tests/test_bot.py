@@ -19,7 +19,6 @@ os.environ.setdefault("TELEGRAM_ADMIN_IDS", "123456789")
 
 from fastapi.testclient import TestClient
 from main import app  # noqa: E402
-from services.xendit_service import XenditService  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -810,99 +809,8 @@ class TestUsdtQrImage:
 
 
 # ---------------------------------------------------------------------------
-# Xendit webhook
+# Maya Top-Up integration
 # ---------------------------------------------------------------------------
-class TestXenditWebhook:
-    def test_empty_body(self, client):
-        r = client.post("/api/v1/xendit/webhook", json={})
-        assert r.status_code == 200
-        assert r.json()["status"] == "ok"
-
-    def test_unknown_status(self, client):
-        r = client.post(
-            "/api/v1/xendit/webhook",
-            json={"external_id": "test-xendit-123", "status": "UNKNOWN_STATUS"},
-        )
-        assert r.status_code == 200
-        assert r.json()["status"] == "ok"
-
-
-# ---------------------------------------------------------------------------
-# Xendit e-wallet channel_properties
-# ---------------------------------------------------------------------------
-class TestXenditEwalletChannelProperties:
-    """Verify that create_ewallet_charge always sends required channel_properties."""
-
-    def test_gcash_charge_includes_success_redirect_url(self):
-        """PH_GCASH requires success_redirect_url in channel_properties (API_VALIDATION_ERROR fix)."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "id": "ewc-test-123",
-            "status": "PENDING",
-            "actions": {"desktop_web_checkout_url": "https://gcash.example.com/pay"},
-        }
-        mock_response.raise_for_status = MagicMock()
-
-        captured_payload: dict = {}
-
-        async def mock_post(url, **kwargs):
-            captured_payload.update(kwargs.get("json", {}))
-            return mock_response
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = mock_post
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            svc = XenditService()
-            svc.secret_key = "test-key"
-            result = asyncio.run(
-                svc.create_ewallet_charge(amount=100, channel_code="PH_GCASH")
-            )
-
-        assert result["success"] is True
-        props = captured_payload.get("channel_properties", {})
-        assert "success_redirect_url" in props, (
-            "PH_GCASH channel_properties must include success_redirect_url"
-        )
-        assert props["success_redirect_url"], "success_redirect_url must not be empty"
-
-    def test_custom_redirect_url_is_used(self):
-        """Caller-supplied success_redirect_url takes precedence over the default."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"id": "ewc-test-456", "status": "PENDING", "actions": {}}
-        mock_response.raise_for_status = MagicMock()
-
-        captured_payload: dict = {}
-
-        async def mock_post(url, **kwargs):
-            captured_payload.update(kwargs.get("json", {}))
-            return mock_response
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = mock_post
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            svc = XenditService()
-            svc.secret_key = "test-key"
-            result = asyncio.run(
-                svc.create_ewallet_charge(
-                    amount=200,
-                    channel_code="PH_GRABPAY",
-                    success_redirect_url="https://myapp.com/success",
-                    failure_redirect_url="https://myapp.com/failed",
-                )
-            )
-
-        assert result["success"] is True
-        props = captured_payload.get("channel_properties", {})
-        assert props["success_redirect_url"] == "https://myapp.com/success"
-        assert props["failure_redirect_url"] == "https://myapp.com/failed"
-
-
 class TestMayaTopUpIntegration:
     """Verify Maya wallet top-up creates checkout-based invoices correctly."""
 
@@ -937,61 +845,6 @@ class TestMayaTopUpIntegration:
         assert data["external_id"] == "maya-external-abc"
 
 
-# ---------------------------------------------------------------------------
-# Xendit QR code payload validation
-# ---------------------------------------------------------------------------
-class TestXenditQrCodePayload:
-    """Verify that create_qr_code sends required fields (external_id + callback_url)."""
-
-    def _run(self, coro):
-        return asyncio.run(coro)
-
-    def _make_mock_client(self, captured: dict):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "id": "qr-test-123",
-            "qr_string": "00020101...",
-            "status": "ACTIVE",
-        }
-        mock_response.raise_for_status = MagicMock()
-
-        async def mock_post(url, **kwargs):
-            captured.update(kwargs.get("json", {}))
-            return mock_response
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = mock_post
-        return mock_client
-
-    def test_qr_code_sends_external_id(self):
-        """Xendit /qr_codes requires external_id (not reference_id)."""
-        captured: dict = {}
-        mock_client = self._make_mock_client(captured)
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            svc = XenditService()
-            svc.secret_key = "test-key"
-            result = self._run(svc.create_qr_code(amount=500, description="Test"))
-
-        assert result["success"] is True
-        assert "external_id" in captured, "Payload must contain external_id"
-        assert "reference_id" not in captured, "Payload must not contain reference_id"
-
-    def test_qr_code_sends_callback_url(self):
-        """Xendit /qr_codes requires callback_url in the request body."""
-        captured: dict = {}
-        mock_client = self._make_mock_client(captured)
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            svc = XenditService()
-            svc.secret_key = "test-key"
-            result = self._run(svc.create_qr_code(amount=500))
-
-        assert result["success"] is True
-        assert "callback_url" in captured, "Payload must contain callback_url"
-        assert captured["callback_url"], "callback_url must not be empty"
 class TestEvents:
     def test_simulate_requires_auth(self, client):
         r = client.post(
@@ -1010,23 +863,6 @@ class TestEvents:
         data = r.json()
         assert data["success"] is True
         assert data["amount"] == 500.0
-
-
-# ---------------------------------------------------------------------------
-# Transaction stats
-# ---------------------------------------------------------------------------
-class TestTransactionStats:
-    def test_stats_requires_auth(self, client):
-        r = client.get("/api/v1/xendit/transaction-stats")
-        assert r.status_code == 401
-
-    def test_stats_authenticated(self, client, auth_headers):
-        r = client.get("/api/v1/xendit/transaction-stats", headers=auth_headers)
-        assert r.status_code == 200
-        data = r.json()
-        for field in ("total_count", "paid_count", "pending_count", "expired_count"):
-            assert field in data
-            assert isinstance(data[field], int)
 
 
 # ---------------------------------------------------------------------------
@@ -1093,14 +929,14 @@ class TestDemoData:
         assert data["total"] >= 8
 
     def test_demo_transaction_stats_reflect_seed(self, client, auth_headers):
-        """Transaction stats should reflect the seeded paid/pending/expired records."""
-        r = client.get("/api/v1/xendit/transaction-stats", headers=auth_headers)
+        """Transaction list should return the seeded paid/pending/expired records."""
+        r = client.get("/api/v1/entities/transactions", headers=auth_headers)
         assert r.status_code == 200
         data = r.json()
-        # Seed data has 6 paid, 1 pending, 1 expired
-        assert data["paid_count"] >= 5
-        assert data["pending_count"] >= 1
-        assert data["expired_count"] >= 1
+        assert data["total"] >= 8
+        assert any(item["status"] == "paid" for item in data["items"])
+        assert any(item["status"] == "pending" for item in data["items"])
+        assert any(item["status"] == "expired" for item in data["items"])
 
 
 # ---------------------------------------------------------------------------
