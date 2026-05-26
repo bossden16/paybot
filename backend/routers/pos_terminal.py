@@ -1,9 +1,11 @@
 import logging
 from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
 
+from core.auth import pwd_context
 from dependencies.auth import get_current_user_id, get_current_admin, get_admin_user
 from dependencies.database import get_db
 from schemas.auth import UserResponse
@@ -27,7 +29,7 @@ from schemas.pos_terminal import (
     POSTerminalDeviceListResponse,
 )
 from services.pos_terminal import POSTerminalService
-
+from models.pos_terminal import POSTerminal, TerminalStatus
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/pos-terminals", tags=["POS Terminals"])
@@ -435,3 +437,61 @@ async def assign_device(
         raise HTTPException(status_code=400, detail=result.get("error", "Failed to assign device"))
     
     return APIResponse(success=True, message=result.get("message"))
+
+
+# ============ PIN Management ============
+
+
+class PinSetRequest(BaseModel):
+    pin: str
+
+
+@router.post("/{terminal_id}/pin/set", response_model=APIResponse)
+async def set_terminal_pin(
+    terminal_id: int,
+    payload: PinSetRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or update the operator PIN for a terminal."""
+    from models.pos_terminal import POSTerminal
+    res = await db.execute(select(POSTerminal).where(POSTerminal.id == terminal_id))
+    terminal = res.scalar_one_or_none()
+    
+    if not terminal:
+        raise HTTPException(status_code=404, detail="Terminal not found")
+    
+    if terminal.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    if not payload.pin.isdigit() or len(payload.pin) != 4:
+        raise HTTPException(status_code=400, detail="PIN must be 4 digits")
+    
+    terminal.operator_pin = pwd_context.hash(payload.pin)
+    await db.commit()
+    
+    return APIResponse(success=True, message="PIN set successfully")
+
+
+@router.post("/{terminal_id}/pin/verify", response_model=APIResponse)
+async def verify_terminal_pin(
+    terminal_id: int,
+    payload: PinSetRequest, # Reuse PinSetRequest as it just contains 'pin'
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify the operator PIN for a terminal."""
+    from models.pos_terminal import POSTerminal
+    res = await db.execute(select(POSTerminal).where(POSTerminal.id == terminal_id))
+    terminal = res.scalar_one_or_none()
+    
+    if not terminal:
+        raise HTTPException(status_code=404, detail="Terminal not found")
+    
+    if not terminal.operator_pin:
+        raise HTTPException(status_code=400, detail="PIN not set for this terminal")
+    
+    if not pwd_context.verify(payload.pin, terminal.operator_pin):
+        raise HTTPException(status_code=401, detail="Invalid PIN")
+    
+    return APIResponse(success=True, message="PIN verified")

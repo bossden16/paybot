@@ -6,8 +6,10 @@ const BASE_URL = 'https://telegram.drl-developers.info/api/v1';
 
 const getHeaders = async () => {
   const token = await AsyncStorage.getItem('auth_token');
+  const deviceId = await DeviceInfo.getUniqueId();
   return {
     'Content-Type': 'application/json',
+    'X-Device-ID': deviceId,
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
 };

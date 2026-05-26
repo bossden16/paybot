@@ -2,6 +2,11 @@
 Alembic migration for POS Terminal feature
 Add pos_terminals, pos_terminal_requests, and pos_terminal_transactions tables
 """
+revision = '001_pos_terminals'
+down_revision = 'd4825d2e0284' # Based on the last migration I saw in list_files
+branch_labels = None
+depends_on = None
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql

@@ -39,6 +39,9 @@ class POSTerminal(Base):
     
     # Device linkage
     device_id = Column(String(255), nullable=True, index=True) # Linked physical device ID
+    last_device_id = Column(String(255), nullable=True) # ID of last device that successfully logged in
+    operator_pin = Column(String(255), nullable=True) # Hashed 4-digit PIN for quick access
+    authorized_at = Column(DateTime(timezone=True), nullable=True) # Timestamp of last login/auth
     
     # Assignment
     user_id = Column(String(64), nullable=False, index=True)  # Telegram user ID

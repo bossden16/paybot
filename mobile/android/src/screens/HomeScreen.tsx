@@ -35,7 +35,7 @@ const COLORS = {
 
 const api = {
   getTerminals: async (token) => {
-    const response = await fetch('https://telegram.drl-developers.info/api/v1/pos-terminals/', {
+    const response = await fetch('https://telegram.drl-developers.info/api/v1/pos-terminals', {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -280,126 +280,126 @@ export const HomeScreen = ({ navigation }) => {
       ) : (
         <ScrollView
           style={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-          />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>POS Terminal</Text>
-          <Text style={styles.headerSubtitle}>Accept payments on the go</Text>
-        </View>
-
-        {/* Setup Guide - only show if no terminals or for new users */}
-        {!selectedTerminal && (
-          <View style={styles.guideCard}>
-            <View style={styles.guideHeader}>
-              <MaterialIcons name="security" size={24} color={COLORS.primary} />
-              <Text style={styles.guideTitle}>Activate Real Payments</Text>
-            </View>
-            <Text style={styles.guideText}>
-              To transform this app into a real Maya terminal, configure your API keys in the backend environment.
-            </Text>
-            <View style={styles.guideStep}>
-              <Text style={styles.stepNum}>1</Text>
-              <Text style={styles.stepText}>Get your <Text style={styles.bold}>Maya Business Manager</Text> keys</Text>
-            </View>
-            <View style={styles.guideStep}>
-              <Text style={styles.stepNum}>2</Text>
-              <Text style={styles.stepText}>Set <Text style={styles.code}>MAYA_BUSINESS_API_KEY</Text> in Railway</Text>
-            </View>
-            <View style={styles.guideStep}>
-              <Text style={styles.stepNum}>3</Text>
-              <Text style={styles.stepText}>Set <Text style={styles.code}>MAYA_BUSINESS_MODE</Text> to 'live'</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.guideButton}
-              onPress={() => Toast.show({ type: 'info', text1: 'Settings', text2: 'Please configure these in your Railway Dashboard.' })}
-            >
-              <Text style={styles.guideButtonText}>View Setup Documentation</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Terminals Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Terminals</Text>
-            {terminalsQuery.isLoading && <ActivityIndicator color={COLORS.primary} />}
-          </View>
-
-          {terminalsQuery.isLoading && !terminalsQuery.data ? (
-            <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 20 }} />
-          ) : terminalsQuery.data?.data?.length > 0 ? (
-            <FlatList
-              data={terminalsQuery.data.data}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TerminalCard
-                  terminal={item}
-                  onPress={() => setSelectedTerminal(item)}
-                  isSelected={selectedTerminal?.id === item.id}
-                />
-              )}
-              scrollEnabled={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
             />
-          ) : (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="devices" size={48} color={COLORS.textSecondary} />
-              <Text style={styles.emptyStateText}>No terminals assigned yet</Text>
-              <Text style={styles.emptyStateSubtext}>Contact your admin to request a terminal</Text>
+          }
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>POS Terminal</Text>
+            <Text style={styles.headerSubtitle}>Accept payments on the go</Text>
+          </View>
+
+          {/* Setup Guide - only show if no terminals or for new users */}
+          {!selectedTerminal && (
+            <View style={styles.guideCard}>
+              <View style={styles.guideHeader}>
+                <MaterialIcons name="security" size={24} color={COLORS.primary} />
+                <Text style={styles.guideTitle}>Activate Real Payments</Text>
+              </View>
+              <Text style={styles.guideText}>
+                To transform this app into a real Maya terminal, configure your API keys in the backend environment.
+              </Text>
+              <View style={styles.guideStep}>
+                <Text style={styles.stepNum}>1</Text>
+                <Text style={styles.stepText}>Get your <Text style={styles.bold}>Maya Business Manager</Text> keys</Text>
+              </View>
+              <View style={styles.guideStep}>
+                <Text style={styles.stepNum}>2</Text>
+                <Text style={styles.stepText}>Set <Text style={styles.code}>MAYA_BUSINESS_API_KEY</Text> in Railway</Text>
+              </View>
+              <View style={styles.guideStep}>
+                <Text style={styles.stepNum}>3</Text>
+                <Text style={styles.stepText}>Set <Text style={styles.code}>MAYA_BUSINESS_MODE</Text> to 'live'</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.guideButton}
+                onPress={() => Toast.show({ type: 'info', text1: 'Settings', text2: 'Please configure these in your Railway Dashboard.' })}
+              >
+                <Text style={styles.guideButtonText}>View Setup Documentation</Text>
+              </TouchableOpacity>
             </View>
           )}
-        </View>
 
-        {/* Create Transaction */}
-        {selectedTerminal && (
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() =>
-              navigation.navigate('CreateTransaction', {
-                terminal: selectedTerminal,
-              })
-            }
-          >
-            <MaterialIcons name="add" size={24} color="#fff" />
-            <Text style={styles.createButtonText}>Create Payment Order</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Recent Transactions */}
-        {selectedTerminal && (
+          {/* Terminals Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Transactions</Text>
-              {transactionsQuery.isLoading && <ActivityIndicator color={COLORS.primary} />}
+              <Text style={styles.sectionTitle}>Your Terminals</Text>
+              {terminalsQuery.isLoading && <ActivityIndicator color={COLORS.primary} />}
             </View>
 
-            {transactionsQuery.isLoading && !transactionsQuery.data ? (
+            {terminalsQuery.isLoading && !terminalsQuery.data ? (
               <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 20 }} />
-            ) : transactionsQuery.data?.data?.length > 0 ? (
+            ) : terminalsQuery.data?.data?.length > 0 ? (
               <FlatList
-                data={transactionsQuery.data.data}
+                data={terminalsQuery.data.data}
                 keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => <TransactionItem transaction={item} />}
+                renderItem={({ item }) => (
+                  <TerminalCard
+                    terminal={item}
+                    onPress={() => setSelectedTerminal(item)}
+                    isSelected={selectedTerminal?.id === item.id}
+                  />
+                )}
                 scrollEnabled={false}
               />
             ) : (
               <View style={styles.emptyState}>
-                <MaterialIcons name="receipt" size={48} color={COLORS.textSecondary} />
-                <Text style={styles.emptyStateText}>No transactions yet</Text>
+                <MaterialIcons name="devices" size={48} color={COLORS.textSecondary} />
+                <Text style={styles.emptyStateText}>No terminals assigned yet</Text>
+                <Text style={styles.emptyStateSubtext}>Contact your admin to request a terminal</Text>
               </View>
             )}
           </View>
-        )}
-      </ScrollView>
-    )}
-  </SafeAreaView>
-);
+
+          {/* Create Transaction */}
+          {selectedTerminal && (
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() =>
+                navigation.navigate('CreateTransaction', {
+                  terminal: selectedTerminal,
+                })
+              }
+            >
+              <MaterialIcons name="add" size={24} color="#fff" />
+              <Text style={styles.createButtonText}>Create Payment Order</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Recent Transactions */}
+          {selectedTerminal && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Transactions</Text>
+                {transactionsQuery.isLoading && <ActivityIndicator color={COLORS.primary} />}
+              </View>
+
+              {transactionsQuery.isLoading && !transactionsQuery.data ? (
+                <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 20 }} />
+              ) : transactionsQuery.data?.data?.length > 0 ? (
+                <FlatList
+                  data={transactionsQuery.data.data}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => <TransactionItem transaction={item} />}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={styles.emptyState}>
+                  <MaterialIcons name="receipt" size={48} color={COLORS.textSecondary} />
+                  <Text style={styles.emptyStateText}>No transactions yet</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
 };
 
 const styles = StyleSheet.create({

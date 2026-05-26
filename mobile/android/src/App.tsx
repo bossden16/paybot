@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, ActivityIndicator, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -18,6 +19,7 @@ import { CreateTransactionScreen } from './screens/CreateTransactionScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TransactionsScreen } from './screens/TransactionsScreen';
+import { PinLockScreen } from './screens/PinLockScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -126,6 +128,7 @@ export default function App() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isDeviceLinked, setIsDeviceLinked] = React.useState(false);
   const [terminalId, setTerminalId] = React.useState(null);
+  const [isLocked, setIsLocked] = React.useState(false);
 
   const authContext = React.useMemo(() => ({
     signIn: async (token) => {
@@ -134,9 +137,27 @@ export default function App() {
     },
     signOut: async () => {
       await AsyncStorage.removeItem('auth_token');
+      await AsyncStorage.removeItem('terminal_id');
+      await AsyncStorage.removeItem('has_pin');
       setIsLoggedIn(false);
+      setIsLocked(false);
     },
   }), []);
+
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active' && isLoggedIn) {
+        const hasPin = await AsyncStorage.getItem('has_pin');
+        if (hasPin === 'true') {
+          setIsLocked(true);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isLoggedIn]);
 
   React.useEffect(() => {
     const bootstrapAsync = async () => {
@@ -151,6 +172,11 @@ export default function App() {
         if (registration.success && registration.data) {
           setIsDeviceLinked(registration.data.is_linked);
           setTerminalId(registration.data.terminal_id);
+          // If we have a terminal ID and it has a PIN, lock it initially
+          const hasPin = await AsyncStorage.getItem('has_pin');
+          if (token && hasPin === 'true') {
+            setIsLocked(true);
+          }
         }
       } catch (e) {
         console.log('Failed during startup:', e);
@@ -167,6 +193,17 @@ export default function App() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <AuthContext.Provider value={authContext}>
+        <PinLockScreen
+          onUnlock={() => setIsLocked(false)}
+          onLogout={() => authContext.signOut()}
+        />
+      </AuthContext.Provider>
     );
   }
 

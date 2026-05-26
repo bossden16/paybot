@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -18,6 +19,7 @@ from core.auth import (
     generate_nonce,
     generate_state,
     validate_id_token,
+    create_access_token,
 )
 from core.config import settings
 from core.database import get_db
@@ -41,7 +43,7 @@ from services.auth import AuthService
 from services.telegram_service import TelegramService
 # Xendit removed; KYC via Xendit is no longer performed. Maya Manager checkout
 # integration does not provide customer KYC creation via this API.
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
@@ -659,58 +661,94 @@ async def telegram_debug():
     return debug_info
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/terminal-login", response_model=LoginResponse)
 async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Simple login for mobile POS clients."""
+    """Secure login for mobile POS clients with device binding."""
     admin_email = getattr(settings, "admin_user_email", "") or "admin@paybot.local"
     admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
 
+    authenticated_user = None
     if payload.email == admin_email and payload.password == admin_password:
         admin_id = getattr(settings, "admin_user_id", "admin")
-        user = User(id=admin_id, email=admin_email, name="Admin User", role="admin")
-
-        auth_service = AuthService(db)
-        app_token, _, _ = await auth_service.issue_app_token(user=user)
-
-        # Build permissions
-        perms = UserPermissions(
-            is_super_admin=True,
-            can_manage_payments=True,
-            can_manage_disbursements=True,
-            can_view_reports=True,
-            can_manage_wallet=True,
-            can_manage_transactions=True,
-            can_manage_bot=True,
-        )
-
-        user_resp = UserResponse(
-            id=user.id,
-            email=user.email,
-            name=user.name,
-            role=user.role,
-            permissions=perms
-        )
-
-        return LoginResponse(access_token=app_token, user=user_resp)
+        authenticated_user = User(id=admin_id, email=admin_email, name="Admin User", role="admin")
 
     # Check for demo/test user
-    if payload.email == "demo@paybot.local" and payload.password == "demo123":
-        user = User(id="demo_user", email="demo@paybot.local", name="Demo User", role="user")
-        auth_service = AuthService(db)
-        app_token, _, _ = await auth_service.issue_app_token(user=user)
+    if not authenticated_user and payload.email == "demo@paybot.local" and payload.password == "demo123":
+        authenticated_user = User(id="demo_user", email="demo@paybot.local", name="Demo User", role="user")
 
-        user_resp = UserResponse(
-            id=user.id,
-            email=user.email,
-            name=user.name,
-            role=user.role,
-            permissions=UserPermissions()
+    if not authenticated_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
         )
-        return LoginResponse(access_token=app_token, user=user_resp)
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid email or password",
+    # Secure Device Binding
+    terminal_id = None
+    has_pin = False
+    if payload.device_id:
+        from models.pos_terminal import POSTerminal
+        # Find terminal assigned to this user and device
+        res = await db.execute(
+            select(POSTerminal).where(
+                and_(
+                    POSTerminal.user_id == authenticated_user.id,
+                    POSTerminal.device_id == payload.device_id
+                )
+            )
+        )
+        terminal = res.scalar_one_or_none()
+        if not terminal:
+            # Check if device is authorized but not linked
+            from models.pos_terminal import POSTerminalDevice
+            device_res = await db.execute(
+                select(POSTerminalDevice).where(POSTerminalDevice.device_id == payload.device_id)
+            )
+            device = device_res.scalar_one_or_none()
+            if not device or not device.is_authorized:
+                 raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This device is not authorized. Please contact your administrator.",
+                )
+        else:
+            terminal_id = terminal.id
+            has_pin = bool(terminal.operator_pin)
+            terminal.last_device_id = payload.device_id
+            terminal.authorized_at = datetime.utcnow()
+            await db.commit()
+
+    auth_service = AuthService(db)
+    # Inject device_id into JWT claims for verification on every request
+    claims_override = {"device_id": payload.device_id} if payload.device_id else {}
+    
+    # Building full claims
+    expires_minutes = int(getattr(settings, "jwt_expire_minutes", 60))
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    
+    token_claims = {
+        "sub": authenticated_user.id,
+        "email": authenticated_user.email,
+        "role": authenticated_user.role,
+        "name": authenticated_user.name,
+        **claims_override
+    }
+    
+    from core.auth import create_access_token
+    app_token = create_access_token(token_claims, expires_minutes=expires_minutes)
+
+    perms = UserPermissions(is_super_admin=(authenticated_user.role == "admin"))
+    user_resp = UserResponse(
+        id=authenticated_user.id,
+        email=authenticated_user.email,
+        name=authenticated_user.name,
+        role=authenticated_user.role,
+        permissions=perms
+    )
+
+    return LoginResponse(
+        access_token=app_token, 
+        user=user_resp, 
+        terminal_id=terminal_id,
+        has_pin=has_pin
     )
 
 

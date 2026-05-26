@@ -87,9 +87,9 @@ class Settings(BaseSettings):
     maya_base_url: str = ""
 
     # Maya Business API (for card payments and POS terminals)
-    maya_business_api_key: str = ""
-    maya_business_secret_key: str = ""
-    maya_business_mode: str = "sandbox"  # "sandbox" or "live"
+    maya_business_api_key: str = "pk-y7C7YZk6mCI7y1E7dgCH39dFrBYtR84QhvjQAGftT3q"
+    maya_business_secret_key: str = "sk-iuhfzxVglf1ZTpnYsrIeKSy40H6v6yOmNHV3VIkVK8n"
+    maya_business_mode: str = "live"  # "sandbox" or "live"
     maya_business_base_url: str = ""
 
     # Facebook Messenger API

@@ -24,7 +24,7 @@ async def get_bearer_token(
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication credentials were not provided")
 
 
-async def get_current_user(token: str = Depends(get_bearer_token)) -> UserResponse:
+async def get_current_user(request: Request, token: str = Depends(get_bearer_token)) -> UserResponse:
     """Dependency to get current authenticated user via JWT token."""
     try:
         payload = decode_access_token(token)
@@ -36,6 +36,22 @@ async def get_current_user(token: str = Depends(get_bearer_token)) -> UserRespon
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+
+    # Secure Device Binding Verification
+    claimed_device_id = payload.get("device_id")
+    if claimed_device_id:
+        header_device_id = request.headers.get("X-Device-ID")
+        if header_device_id != claimed_device_id:
+             logger.warning(
+                 "Device binding mismatch for user hash: %s. Claimed: %s, Header: %s",
+                 hashlib.sha256(str(user_id).encode()).hexdigest()[:8],
+                 claimed_device_id,
+                 header_device_id
+             )
+             raise HTTPException(
+                 status_code=status.HTTP_403_FORBIDDEN, 
+                 detail="This session is bound to another device."
+             )
 
     last_login_raw = payload.get("last_login")
     last_login = None

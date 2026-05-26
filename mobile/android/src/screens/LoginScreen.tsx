@@ -12,6 +12,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { AuthContext } from '../App';
 
+import DeviceInfo from 'react-native-device-info';
+
 export const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,19 +28,25 @@ export const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // For now, using your email to trigger a "real" session experience
-      console.log('Logging in with:', email);
+      const deviceId = await DeviceInfo.getUniqueId();
+      console.log('Logging in with:', email, 'on device:', deviceId);
 
       // Call real login API in production
-      const response = await fetch('https://telegram.drl-developers.info/api/v1/auth/login', {
+      const response = await fetch('https://telegram.drl-developers.info/api/v1/auth/terminal-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, device_id: deviceId }),
       });
 
       const result = await response.json();
 
       if (response.ok && result.access_token) {
+        // Save terminal info if available
+        if (result.terminal_id) {
+           await AsyncStorage.setItem('terminal_id', result.terminal_id.toString());
+        }
+        await AsyncStorage.setItem('has_pin', result.has_pin ? 'true' : 'false');
+
         await signIn(result.access_token);
         Toast.show({ type: 'success', text1: 'Login successful' });
       } else {

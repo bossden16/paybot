@@ -60,9 +60,12 @@ class TokenExchangeResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    device_id: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    terminal_id: Optional[int] = None
+    has_pin: bool = False
