@@ -27,7 +27,7 @@ const COLORS = {
 
 const api = {
   getTerminals: async (token) => {
-    const response = await fetch('https://paybot-production-7350.up.railway.app/api/v1/pos-terminals/', {
+    const response = await fetch('https://telegram.drl-developers.info/api/v1/pos-terminals/', {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -39,7 +39,7 @@ const api = {
 
   getAllTransactions: async (token, terminalId) => {
     const response = await fetch(
-      `https://paybot-production-7350.up.railway.app/api/v1/pos-terminals/${terminalId}/transactions?per_page=50`,
+      `https://telegram.drl-developers.info/api/v1/pos-terminals/${terminalId}/transactions?per_page=50`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,

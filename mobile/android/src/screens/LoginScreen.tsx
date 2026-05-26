@@ -32,7 +32,7 @@ export const LoginScreen = ({ navigation }) => {
       console.log('Logging in with:', email, 'on device:', deviceId);
 
       // Call real login API in production
-      const response = await fetch('https://paybot-production-7350.up.railway.app/api/v1/auth/terminal-login', {
+      const response = await fetch('https://telegram.drl-developers.info/api/v1/auth/terminal-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, device_id: deviceId }),
