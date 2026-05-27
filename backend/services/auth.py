@@ -177,6 +177,13 @@ async def initialize_admin_user():
         else:
             # Ensure permissions are set correctly for the existing admin entry
             admin_entry.is_super_admin = True
+            admin_entry.can_manage_payments = True
+            admin_entry.can_manage_disbursements = True
+            admin_entry.can_view_reports = True
+            admin_entry.can_manage_wallet = True
+            admin_entry.can_manage_transactions = True
+            admin_entry.can_manage_bot = True
+            admin_entry.can_approve_topups = True
             admin_entry.telegram_username = "alipayboss"
             await db.commit()
 
