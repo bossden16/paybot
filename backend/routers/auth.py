@@ -46,8 +46,6 @@ from services.telegram_service import TelegramService
 from sqlalchemy import select, and_, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.pos_terminal import POSTerminal, POSTerminalDevice
-
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 logger = logging.getLogger(__name__)
 
@@ -690,6 +688,7 @@ async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)
     
     if payload.device_id:
         try:
+            from models.pos_terminal import POSTerminal, POSTerminalDevice
             # Check if columns exist before querying to prevent 500 errors on failed migrations
             mapper = inspect(POSTerminal)
             if "device_id" in mapper.attrs:
