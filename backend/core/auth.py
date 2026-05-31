@@ -9,8 +9,11 @@ import httpx
 from core.config import settings
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError, JWSSignatureError, JWTClaimsError
+from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def generate_state() -> str:

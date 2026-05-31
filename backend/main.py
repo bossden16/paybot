@@ -15,10 +15,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from core.database import get_db
+from fastapi import Depends
 
 # MODULE_IMPORTS_START
 from services.database import initialize_database, close_database
-from services.auth import initialize_admin_user
+from services.auth import initialize_admin_user, initialize_demo_users
+import services.wallet_integration # Initialize wallet event handlers
 # MODULE_IMPORTS_END
 
 # Telegram bot commands registered on startup
@@ -43,8 +48,10 @@ BOT_COMMANDS = [
     {"command": "status", "description": "Check payment status"},
     {"command": "list", "description": "View recent transactions"},
     {"command": "cancel", "description": "Cancel a pending payment"},
-    {"command": "balance", "description": "Check wallet balance"},
+    {"command": "balance", "description": "Check PHP wallet balance"},
     {"command": "usdbalance", "description": "Check USD wallet balance"},
+    {"command": "wallet", "description": "Full e-wallet menu (Send, Top-up)"},
+    {"command": "terminal", "description": "Manage your POS terminals"},
     {"command": "send", "description": "Transfer to another user"},
     {"command": "withdraw", "description": "Withdraw from wallet"},
     {"command": "report", "description": "View revenue summary"},
@@ -157,15 +164,18 @@ async def lifespan(app: FastAPI):
             "invalidated on restart. Set JWT_SECRET_KEY for production use."
         )
 
-    # Xendit is optional in some deployments (e.g., PayMongo-only).
-    if not settings.xendit_secret_key:
-        logger.warning("XENDIT_SECRET_KEY is not set. Xendit-based payment features will be unavailable.")
+    # Maya Manager is the primary payment gateway.
+    if not settings.maya_secret_key:
+        logger.warning(
+            "MAYA_SECRET_KEY is not configured. Maya-based payment features will be unavailable."
+        )
 
     # MODULE_STARTUP_START
     db_ready = False
     try:
         await initialize_database()
         await initialize_admin_user()
+        await initialize_demo_users()
         db_ready = True
     except Exception as e:
         logger.error(f"Database startup failed (app will run in degraded mode): {e}")
@@ -301,6 +311,36 @@ setup_logging()
 include_routers_from_package(app, "routers")
 
 
+# Enforce Cloudflare Turnstile verification for SPA routes when configured.
+@app.middleware("http")
+async def enforce_turnstile_middleware(request: Request, call_next):
+    # Only enforce for GET requests to SPA routes (non-API, non-static)
+    path = request.url.path or "/"
+    if request.method == "GET":
+        # Allowlist prefixes that should bypass turnstile
+        allow_prefixes = (
+            "/api/",
+            "/assets",
+            "/images",
+            "/uploads",
+            "/favicon.ico",
+            "/health",
+            "/auth/",
+            "/login",
+            "/register",
+            "/robots.txt",
+        )
+        if not any(path.startswith(p) for p in allow_prefixes):
+            # If server is configured with a Turnstile secret, require cookie
+            turnstile_secret = str(getattr(settings, "cloudflare_turnstile_secret_key", "") or "")
+            if turnstile_secret:
+                cookie = request.cookies.get("turnstile_verified")
+                if not cookie:
+                    # redirect to login where the Turnstile widget is shown
+                    return RedirectResponse(url="/login")
+    return await call_next(request)
+
+
 # Add exception handler for all exceptions except HTTPException
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
@@ -337,6 +377,41 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/api/v1/diagnostics/db-schema")
+async def db_diagnostics(db: AsyncSession = Depends(get_db)):
+    """Diagnostic endpoint to check DB schema status."""
+    from sqlalchemy import text
+    try:
+        # Check tables
+        tables_res = await db.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"))
+        tables = [row[0] for row in tables_res]
+        
+        # Check columns of pos_terminals
+        columns = {}
+        if 'pos_terminals' in tables:
+            cols_res = await db.execute(text("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'pos_terminals'"))
+            columns['pos_terminals'] = [f"{row[0]} ({row[1]})" for row in cols_res]
+            
+        # Check alembic version
+        alembic_res = await db.execute(text("SELECT version_num FROM alembic_version"))
+        alembic_version = alembic_res.scalar()
+        
+        # Check routes
+        routes = []
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                routes.append(f"{getattr(route, 'methods', 'ANY')} {route.path}")
+
+        return {
+            "tables": tables,
+            "columns": columns,
+            "alembic_version": alembic_version,
+            "routes": sorted(routes)
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # ── Frontend SPA serving ─────────────────────────────────────────────────────

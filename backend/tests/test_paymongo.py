@@ -414,6 +414,211 @@ class TestWalletCrediting:
         assert r.status_code in (401, 403, 404, 405)
 
 
+class TestWalletTransferEndpoint:
+    """Exercise the wallet transfer endpoint for PHP and USD wallets."""
+
+    def test_php_wallet_transfer(self, client, auth_headers):
+        import asyncio
+        from core.database import db_manager
+        from datetime import datetime
+        from sqlalchemy import select
+        from models.wallet_transactions import Wallet_transactions
+        from models.wallets import Wallets
+
+        sender_id = "123456789"
+        recipient_id = "555000999"
+        starting_balance = 1000.0
+        transfer_amount = 250.0
+
+        async def seed_sender_wallet():
+            async with db_manager.async_session_maker() as db:
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == sender_id,
+                        Wallets.currency == "PHP",
+                    )
+                )
+                wallet = result.scalar_one_or_none()
+                if wallet:
+                    wallet.balance = starting_balance
+                    wallet.updated_at = datetime.now()
+                else:
+                    wallet = Wallets(
+                        user_id=sender_id,
+                        currency="PHP",
+                        balance=starting_balance,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now(),
+                    )
+                    db.add(wallet)
+                await db.commit()
+
+        asyncio.run(seed_sender_wallet())
+
+        r = client.post(
+            "/api/v1/wallet/transfer",
+            json={
+                "recipient_user_id": recipient_id,
+                "amount": transfer_amount,
+                "currency": "PHP",
+                "note": "PHP transfer test",
+            },
+            headers=auth_headers,
+        )
+        assert r.status_code == 201, r.text
+        data = r.json()
+        assert data["success"] is True
+        assert data["balance"] == pytest.approx(starting_balance - transfer_amount, abs=0.01)
+        assert "Successfully transferred PHP" in data["message"]
+
+        async def verify_php_transfer():
+            async with db_manager.async_session_maker() as db:
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == sender_id,
+                        Wallets.currency == "PHP",
+                    )
+                )
+                sender_wallet = result.scalar_one_or_none()
+                assert sender_wallet is not None
+                assert sender_wallet.balance == pytest.approx(starting_balance - transfer_amount, abs=0.01)
+
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == recipient_id,
+                        Wallets.currency == "PHP",
+                    )
+                )
+                recipient_wallet = result.scalar_one_or_none()
+                assert recipient_wallet is not None
+                assert recipient_wallet.balance == pytest.approx(transfer_amount, abs=0.01)
+
+                txn_result = await db.execute(
+                    select(Wallet_transactions).where(
+                        Wallet_transactions.user_id == sender_id,
+                        Wallet_transactions.transaction_type == "send",
+                    ).order_by(Wallet_transactions.id.desc())
+                )
+                debit_txn = txn_result.scalar_one_or_none()
+                assert debit_txn is not None
+                assert debit_txn.amount == pytest.approx(transfer_amount, abs=0.01)
+
+        asyncio.run(verify_php_transfer())
+
+    def test_usd_wallet_transfer(self, client, auth_headers):
+        import asyncio
+        from core.database import db_manager
+        from datetime import datetime
+        from sqlalchemy import delete, select
+        from models.wallet_transactions import Wallet_transactions
+        from models.wallets import Wallets
+
+        sender_tg_id = "tg-123456789"
+        recipient_id = "555000999"
+        recipient_tg_id = f"tg-{recipient_id}"
+        starting_balance = 500.0
+        transfer_amount = 120.0
+
+        async def seed_usd_wallet():
+            async with db_manager.async_session_maker() as db:
+                await db.execute(
+                    delete(Wallet_transactions).where(
+                        Wallet_transactions.user_id == sender_tg_id,
+                    )
+                )
+                await db.commit()
+
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == sender_tg_id,
+                        Wallets.currency == "USD",
+                    )
+                )
+                wallet = result.scalar_one_or_none()
+                if wallet:
+                    wallet.balance = starting_balance
+                    wallet.updated_at = datetime.now()
+                else:
+                    wallet = Wallets(
+                        user_id=sender_tg_id,
+                        currency="USD",
+                        balance=starting_balance,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now(),
+                    )
+                    db.add(wallet)
+                    await db.commit()
+                    await db.refresh(wallet)
+
+                txn = Wallet_transactions(
+                    user_id=sender_tg_id,
+                    wallet_id=wallet.id,
+                    transaction_type="crypto_topup",
+                    amount=starting_balance,
+                    balance_before=0.0,
+                    balance_after=starting_balance,
+                    recipient=None,
+                    note="Seed USD balance",
+                    status="completed",
+                    reference_id=f"seed-usd-{uuid.uuid4().hex[:12]}",
+                    created_at=datetime.now(),
+                )
+                db.add(txn)
+                await db.commit()
+
+        asyncio.run(seed_usd_wallet())
+
+        r = client.post(
+            "/api/v1/wallet/transfer",
+            json={
+                "recipient_user_id": recipient_id,
+                "amount": transfer_amount,
+                "currency": "USD",
+                "note": "USD transfer test",
+            },
+            headers=auth_headers,
+        )
+        assert r.status_code == 201, r.text
+        data = r.json()
+        assert data["success"] is True
+        assert data["balance"] == pytest.approx(starting_balance - transfer_amount, abs=0.01)
+        assert "Successfully transferred USD" in data["message"]
+
+        async def verify_usd_transfer():
+            async with db_manager.async_session_maker() as db:
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == sender_tg_id,
+                        Wallets.currency == "USD",
+                    )
+                )
+                sender_wallet = result.scalar_one_or_none()
+                assert sender_wallet is not None
+                assert sender_wallet.balance == pytest.approx(starting_balance - transfer_amount, abs=0.01)
+
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == recipient_tg_id,
+                        Wallets.currency == "USD",
+                    )
+                )
+                recipient_wallet = result.scalar_one_or_none()
+                assert recipient_wallet is not None
+                assert recipient_wallet.balance == pytest.approx(transfer_amount, abs=0.01)
+
+                credit_result = await db.execute(
+                    select(Wallet_transactions).where(
+                        Wallet_transactions.user_id == recipient_tg_id,
+                        Wallet_transactions.transaction_type == "usd_receive",
+                    ).order_by(Wallet_transactions.id.desc())
+                )
+                credit_txn = credit_result.scalar_one_or_none()
+                assert credit_txn is not None
+                assert credit_txn.amount == pytest.approx(transfer_amount, abs=0.01)
+
+        asyncio.run(verify_usd_transfer())
+
+
 # ---------------------------------------------------------------------------
 # PayMongo get_balance unit tests
 # ---------------------------------------------------------------------------
@@ -489,34 +694,50 @@ class TestPayMongoGetBalance:
 # ---------------------------------------------------------------------------
 
 class TestSuperAdminWalletBalance:
-    """Test that the super admin's PHP wallet balance is synced from Xendit."""
+    """Test that the super admin's PHP wallet balance uses the stored wallet balance."""
 
-    def test_super_admin_balance_synced_from_xendit(self, client, auth_headers):
-        """Super admin's PHP wallet balance is updated from Xendit realtime balance."""
-        from unittest.mock import AsyncMock, patch, MagicMock
+    def test_super_admin_balance_uses_stored_wallet_balance(self, client, auth_headers):
+        """Super admin's PHP wallet balance is returned from the stored wallet row."""
+        import asyncio
+        from datetime import datetime
+        from core.database import db_manager
+        from models.wallets import Wallets
 
-        live_php_balance = 9876.50
+        user_id = "123456789"
+        stored_balance = 9876.50
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"balance": live_php_balance}
-        mock_response.raise_for_status = MagicMock()
+        async def seed_wallet():
+            from sqlalchemy import select
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
+            async with db_manager.async_session_maker() as db:
+                result = await db.execute(
+                    select(Wallets).where(
+                        Wallets.user_id == user_id,
+                        Wallets.currency == "PHP",
+                    )
+                )
+                wallet = result.scalar_one_or_none()
+                if wallet:
+                    wallet.balance = stored_balance
+                    wallet.updated_at = datetime.now()
+                else:
+                    wallet = Wallets(
+                        user_id=user_id,
+                        currency="PHP",
+                        balance=stored_balance,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now(),
+                    )
+                    db.add(wallet)
+                await db.commit()
 
-            r = client.get("/api/v1/wallet/balance?currency=PHP", headers=auth_headers)
+        asyncio.run(seed_wallet())
 
-        # The test user (123456789) is added as a super admin in TELEGRAM_ADMIN_IDS
-        # so the endpoint should attempt to sync from Xendit.
+        r = client.get("/api/v1/wallet/balance?currency=PHP", headers=auth_headers)
         assert r.status_code == 200
         data = r.json()
         assert data["currency"] == "PHP"
-        # Balance should reflect the mocked Xendit live balance
-        assert data["balance"] == pytest.approx(live_php_balance, abs=0.01)
+        assert data["balance"] == pytest.approx(stored_balance, abs=0.01)
 
     def test_wallet_balance_endpoint_requires_auth(self, client):
         """The /wallet/balance endpoint requires authentication."""

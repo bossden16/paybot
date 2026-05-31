@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -18,12 +19,13 @@ from core.auth import (
     generate_nonce,
     generate_state,
     validate_id_token,
+    create_access_token,
 )
 from core.config import settings
 from core.database import get_db
 from dependencies.auth import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
+from fastapi.responses import RedirectResponse, JSONResponse
 from models.auth import User
 from models.admin_users import AdminUser
 from models.bot_settings import Bot_settings
@@ -34,11 +36,14 @@ from schemas.auth import (
     TokenExchangeResponse,
     UserResponse,
     UserPermissions,
+    LoginRequest,
+    LoginResponse,
 )
 from services.auth import AuthService
 from services.telegram_service import TelegramService
-from services.xendit_service import XenditService
-from sqlalchemy import select
+# Xendit removed; KYC via Xendit is no longer performed. Maya Manager checkout
+# integration does not provide customer KYC creation via this API.
+from sqlalchemy import select, and_, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
@@ -221,7 +226,7 @@ async def telegram_login_legacy_disabled():
 
 
 @router.post("/telegram-login-widget", response_model=TokenExchangeResponse)
-async def telegram_login_widget(payload: TelegramWidgetLoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+async def telegram_login_widget(payload: TelegramWidgetLoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     """Telegram Login Widget admin login with Telegram-signed payload validation."""
     bot_token = str(getattr(settings, "telegram_bot_token", "") or "")
     allowed_admin_ids, allowed_admin_usernames = _get_allowed_telegram_admin_ids()
@@ -397,7 +402,39 @@ async def telegram_login_widget(payload: TelegramWidgetLoginRequest, request: Re
         )
 
     logger.info("[telegram-login-widget] Bot admin authenticated: %s", telegram_user_id)
+    # Set a short-lived cookie to mark Turnstile verification for this session
+    try:
+        secure = os.getenv("ENVIRONMENT", "prod").lower() not in ("dev", "development", "local")
+        # cookie lasts 1 day
+        response.set_cookie(key="turnstile_verified", value="1", httponly=True, secure=secure, max_age=86400, path="/")
+    except Exception:
+        pass
     return TokenExchangeResponse(token=app_token)
+
+
+class TurnstileVerifyRequest(BaseModel):
+    token: str
+
+
+@router.post("/turnstile/verify")
+async def turnstile_verify(payload: TurnstileVerifyRequest, request: Request, response: Response):
+    """Verify a Cloudflare Turnstile token and set a verification cookie on success."""
+    secret = str(getattr(settings, "cloudflare_turnstile_secret_key", "") or "")
+    if not secret:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Turnstile not configured on server")
+    token = payload.token
+    if not token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing turnstile token")
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    client_ip = request.client.host if request.client else None
+    remote_ip = cf_ip or client_ip
+    valid = await _verify_turnstile_token(token, secret, remote_ip)
+    if not valid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Turnstile verification failed")
+    secure = os.getenv("ENVIRONMENT", "prod").lower() not in ("dev", "development", "local")
+    resp = JSONResponse({"success": True})
+    resp.set_cookie(key="turnstile_verified", value="1", httponly=True, secure=secure, max_age=86400, path="/")
+    return resp
 
 
 @router.get("/telegram-login-config")
@@ -622,6 +659,148 @@ async def telegram_debug():
     debug_info["next_step"] = "Capture the exact payload from browser DevTools → Network → /telegram-login-widget POST request"
 
     return debug_info
+
+
+@router.post("/terminal-login", response_model=LoginResponse)
+async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Secure login for mobile POS clients with device binding."""
+    admin_email = getattr(settings, "admin_user_email", "") or "admin@paybot.local"
+    admin_password = getattr(settings, "admin_user_password", "") or os.getenv("ADMIN_PASSWORD", "admin123")
+
+    authenticated_user = None
+    if payload.email == admin_email and payload.password == admin_password:
+        admin_id = getattr(settings, "admin_user_id", "admin")
+        authenticated_user = User(id=admin_id, email=admin_email, name="Admin User", role="admin")
+
+    # Check for demo/test user
+    if not authenticated_user and payload.email == "demo@paybot.local" and payload.password == "demo123":
+        authenticated_user = User(id="demo_user", email="demo@paybot.local", name="Demo User", role="user")
+
+    if not authenticated_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    # Secure Device Binding
+    terminal_id = None
+    has_pin = False
+    
+    if payload.device_id:
+        try:
+            from models.pos_terminal import POSTerminal, POSTerminalDevice
+            # Check if columns exist before querying to prevent 500 errors on failed migrations
+            mapper = inspect(POSTerminal)
+            if "device_id" in mapper.attrs:
+                # Find terminal assigned to this user and device
+                res = await db.execute(
+                    select(POSTerminal).where(
+                        and_(
+                            POSTerminal.user_id == authenticated_user.id,
+                            POSTerminal.device_id == payload.device_id
+                        )
+                    )
+                )
+                terminal = res.scalar_one_or_none()
+                
+                # If no linked terminal, we still allow login for admins so they can reach the dashboard
+                # and register their device. We only block non-admin users without an authorized device.
+                if not terminal:
+                    device_res = await db.execute(
+                        select(POSTerminalDevice).where(POSTerminalDevice.device_id == payload.device_id)
+                    )
+                    device = device_res.scalar_one_or_none()
+                    
+                    # If user is admin, allow them in even if device isn't linked yet
+                    # This allows them to see the dashboard and assign themselves a terminal
+                    if authenticated_user.role == "admin":
+                        logger.info(f"Admin login allowed for unlinked device: {payload.device_id}")
+                    elif not device or not device.is_authorized:
+                         raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="This device is not authorized. Please contact your administrator.",
+                        )
+                else:
+                    terminal_id = terminal.id
+                    has_pin = bool(terminal.operator_pin)
+                    terminal.last_device_id = payload.device_id
+                    terminal.authorized_at = datetime.utcnow()
+                    await db.commit()
+            else:
+                logger.warning("POSTerminal table missing device_id column. Skipping device binding.")
+        except Exception as e:
+            logger.error(f"Error during terminal device binding: {e}")
+            # Fallback: allow login if it's an admin, otherwise block for safety
+            if authenticated_user.role != "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Database error during device verification."
+                )
+
+    auth_service = AuthService(db)
+    # Inject device_id into JWT claims for verification on every request
+    claims_override = {"device_id": payload.device_id} if payload.device_id else {}
+    
+    # Building full claims
+    expires_minutes = int(getattr(settings, "jwt_expire_minutes", 60))
+    
+    # Fetch real permissions if this user is in AdminUser table
+    from models.admin_users import AdminUser
+    res_perms = await db.execute(select(AdminUser).where(AdminUser.telegram_id == authenticated_user.id))
+    admin_record = res_perms.scalar_one_or_none()
+    
+    if admin_record:
+        perms = UserPermissions(
+            is_super_admin=admin_record.is_super_admin,
+            can_manage_payments=admin_record.can_manage_payments,
+            can_manage_disbursements=admin_record.can_manage_disbursements,
+            can_view_reports=admin_record.can_view_reports,
+            can_manage_wallet=admin_record.can_manage_wallet,
+            can_manage_transactions=admin_record.can_manage_transactions,
+            can_manage_bot=admin_record.can_manage_bot,
+            can_approve_topups=admin_record.can_approve_topups,
+        )
+    elif authenticated_user.role == "admin":
+        # Fallback for admin role without record
+        perms = UserPermissions(
+            is_super_admin=True,
+            can_manage_payments=True,
+            can_manage_disbursements=True,
+            can_view_reports=True,
+            can_manage_wallet=True,
+            can_manage_transactions=True,
+            can_manage_bot=True,
+            can_approve_topups=True,
+        )
+    else:
+        perms = UserPermissions(is_super_admin=False)
+    
+    token_claims = {
+        "sub": authenticated_user.id,
+        "email": authenticated_user.email,
+        "role": authenticated_user.role,
+        "name": authenticated_user.name,
+        "permissions": perms.model_dump(),
+        **claims_override
+    }
+    
+    from core.auth import create_access_token
+    app_token = create_access_token(token_claims, expires_minutes=expires_minutes)
+
+    user_resp = UserResponse(
+        id=authenticated_user.id,
+        email=authenticated_user.email,
+        name=authenticated_user.name,
+        role=authenticated_user.role,
+        permissions=perms
+    )
+
+    return LoginResponse(
+        access_token=app_token, 
+        user=user_resp, 
+        terminal_id=terminal_id,
+        has_pin=has_pin
+    )
 
 
 async def login(request: Request, db: AsyncSession = Depends(get_db)):
@@ -942,22 +1121,10 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
             xendit_customer_id=None,
         )
 
-    # Create Xendit customer for KYC (best-effort)
+    # Xendit has been removed. Skip creating an external Xendit customer
+    # during KYB registration. The KYB record will be persisted locally and
+    # reviewed by an admin without external KYC linkage.
     xendit_customer_id: Optional[str] = None
-    try:
-        xendit = XenditService()
-        mobile = body.phone if body.phone.startswith("+") else f"{_PH_COUNTRY_CODE}{body.phone.lstrip('0')}"
-        result = await xendit.create_customer(
-            reference_id=ref_id,
-            given_names=body.full_name,
-            email=body.email,
-            mobile_number=mobile,
-            description=body.business_name or "",
-        )
-        if result.get("success"):
-            xendit_customer_id = result.get("customer_id")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Xendit create_customer failed during registration: %s", exc)
 
     # Persist KYB record
     kyb = KybRegistration(

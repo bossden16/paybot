@@ -69,3 +69,12 @@ frontend/package-lock.json
 .dev.vars*
 !.dev.vars.example
 !.env.example
+my-release-key.keystore
+keystore.base64
+
+# Android release keystore artifacts
+mobile/*.jks
+mobile/*.jks.base64
+mobile/*keystore*.txt
+mobile/android/app/my-release-key.keystore
+mobile_native/android/app/my-release-key.keystore

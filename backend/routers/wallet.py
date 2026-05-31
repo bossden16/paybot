@@ -19,7 +19,8 @@ from models.usdt_send_requests import UsdtSendRequest
 from models.admin_users import AdminUser
 from schemas.auth import UserResponse
 from services.event_bus import payment_event_bus
-from services.xendit_service import XenditService
+# Xendit has been removed; use Maya Manager where applicable or fall back to stored balances.
+from services.maya_service import MayaService
 from routers.app_settings import get_usdt_trc20_address
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,13 @@ class AdminWalletAdjustRequest(BaseModel):
     note: str = ""
 
 
+class WalletTransferRequest(BaseModel):
+    recipient_user_id: str
+    amount: float
+    currency: str = "PHP"
+    note: str = ""
+
+
 # ---------- Helpers ----------
 def _tg_user_id(user_id: str) -> str:
     """Return the Telegram-prefixed user_id used by the bot for wallet storage."""
@@ -248,6 +256,14 @@ def publish_wallet_event(user_id: str, wallet: Wallets, txn_type: str, amount: f
     })
 
 
+def _normalize_wallet_user_id(wallet_user_id: str, currency: str) -> str:
+    normalized = wallet_user_id.strip()
+    if currency.upper() == "USD":
+        normalized = normalized[3:] if normalized.startswith("tg-") else normalized
+        return _tg_user_id(normalized)
+    return normalized
+
+
 # ---------- Routes ----------
 @router.get("/balance", response_model=WalletBalanceResponse)
 async def get_balance(
@@ -270,20 +286,12 @@ async def get_balance(
     if currency_upper == "PHP":
         wallet = await get_or_create_wallet(db, user_id, "PHP")
 
-        # Super admin: sync balance from the realtime Xendit account balance
+        # Super admin: live gateway balance sync removed (Xendit deprecated).
+        # Maya Manager does not provide a balance endpoint via the checkout API,
+        # so we rely on the stored wallet balance here.
         perms = current_user.permissions
         if perms and perms.is_super_admin:
-            svc = XenditService()
-            xendit_result = await svc.get_balance()
-            if xendit_result.get("success"):
-                live_balance = float(xendit_result.get("balance", 0))
-                if live_balance != wallet.balance:
-                    wallet.balance = live_balance
-                    wallet.updated_at = datetime.now()
-                    await db.commit()
-                    await db.refresh(wallet)
-            else:
-                logger.warning("Xendit get_balance failed: %s", xendit_result.get("error"))
+            logger.debug("Live gateway balance sync disabled: using stored wallet balance for super admin")
 
         return WalletBalanceResponse(
             wallet_id=wallet.id,
@@ -669,8 +677,9 @@ async def create_topup(
     if req.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
 
-    xendit = XenditService()
-    result = await xendit.create_invoice(
+    # Use Maya Manager to create a checkout/invoice for wallet top-up
+    maya = MayaService()
+    result = await maya.create_invoice(
         amount=req.amount,
         description=req.description or "Wallet Top Up",
         customer_name=req.customer_name,
@@ -680,18 +689,21 @@ async def create_topup(
     if not result.get("success"):
         raise HTTPException(status_code=502, detail=result.get("error", "Failed to create invoice"))
 
+    checkout_id = result.get("checkout_id", "")
+    checkout_url = result.get("checkout_url", "")
+
     # Save transaction tagged with current user so webhook credits their wallet
     now = datetime.now()
     txn = Transactions(
         user_id=current_user.id,
         transaction_type="top_up",
         external_id=result["external_id"],
-        xendit_id=result["invoice_id"],
+        xendit_id=checkout_id,
         amount=req.amount,
         currency="PHP",
         status="pending",
         description=req.description or "Wallet Top Up",
-        payment_url=result["invoice_url"],
+        payment_url=checkout_url,
         created_at=now,
         updated_at=now,
     )
@@ -700,8 +712,8 @@ async def create_topup(
 
     return TopUpResponse(
         success=True,
-        invoice_id=result["invoice_id"],
-        invoice_url=result["invoice_url"],
+        invoice_id=checkout_id,
+        invoice_url=checkout_url,
         external_id=result["external_id"],
         amount=req.amount,
         message="Invoice created. Complete payment to credit your wallet.",
@@ -925,6 +937,99 @@ async def reject_crypto_topup(
 
 # ---------- User-to-User USD Transfer ----------
 
+@router.post("/transfer", response_model=WalletActionResponse, status_code=201)
+async def transfer_wallet_balance(
+    data: WalletTransferRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transfer funds between two user wallets for PHP or USD."""
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    currency_upper = data.currency.upper().strip() or "PHP"
+    recipient_user_id = _normalize_wallet_user_id(data.recipient_user_id, currency_upper)
+    sender_user_id = str(current_user.id)
+    if currency_upper == "USD":
+        sender_user_id = _tg_user_id(sender_user_id)
+
+    if not recipient_user_id:
+        raise HTTPException(status_code=400, detail="Recipient user ID is required")
+    if recipient_user_id == sender_user_id:
+        raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+
+    sender_wallet = await get_or_create_wallet(db, sender_user_id, currency_upper)
+    recipient_wallet = await get_or_create_wallet(db, recipient_user_id, currency_upper)
+
+    if currency_upper == "USD":
+        sender_balance = await _compute_usd_balance(db, sender_user_id)
+        if sender_balance < data.amount:
+            raise HTTPException(status_code=400, detail=f"Insufficient USD balance (${sender_balance:,.2f})")
+        if sender_wallet.balance != sender_balance:
+            sender_wallet.balance = sender_balance
+            sender_wallet.updated_at = datetime.now()
+
+    if sender_wallet.balance < data.amount:
+        raise HTTPException(status_code=400, detail=f"Insufficient {currency_upper} balance")
+
+    now = datetime.now()
+    sender_balance_before = sender_wallet.balance
+    sender_wallet.balance = max(0.0, sender_wallet.balance - data.amount)
+    sender_wallet.updated_at = now
+
+    recipient_balance_before = recipient_wallet.balance
+    recipient_wallet.balance += data.amount
+    recipient_wallet.updated_at = now
+
+    debit_type = "usd_send" if currency_upper == "USD" else "send"
+    credit_type = "usd_receive" if currency_upper == "USD" else "receive"
+    sender_note = data.note or f"Sent to {recipient_user_id}"
+    recipient_note = data.note or f"Received from {sender_user_id}"
+
+    debit_txn = Wallet_transactions(
+        user_id=sender_user_id,
+        wallet_id=sender_wallet.id,
+        transaction_type=debit_type,
+        amount=data.amount,
+        balance_before=sender_balance_before,
+        balance_after=sender_wallet.balance,
+        recipient=recipient_user_id,
+        note=sender_note,
+        status="completed",
+        reference_id=f"{debit_type}-{sender_wallet.id}-{int(now.timestamp())}",
+        created_at=now,
+    )
+    db.add(debit_txn)
+
+    credit_txn = Wallet_transactions(
+        user_id=recipient_user_id,
+        wallet_id=recipient_wallet.id,
+        transaction_type=credit_type,
+        amount=data.amount,
+        balance_before=recipient_balance_before,
+        balance_after=recipient_wallet.balance,
+        recipient=sender_user_id,
+        note=recipient_note,
+        status="completed",
+        reference_id=f"{credit_type}-{recipient_wallet.id}-{int(now.timestamp())}",
+        created_at=now,
+    )
+    db.add(credit_txn)
+
+    await db.commit()
+    await db.refresh(debit_txn)
+
+    publish_wallet_event(sender_user_id, sender_wallet, debit_type, data.amount, debit_txn.id)
+    publish_wallet_event(recipient_user_id, recipient_wallet, credit_type, data.amount, credit_txn.id)
+
+    return WalletActionResponse(
+        success=True,
+        message=f"Successfully transferred {currency_upper} {data.amount:,.2f} to {recipient_user_id}",
+        balance=sender_wallet.balance,
+        transaction_id=debit_txn.id,
+    )
+
+
 @router.post("/send-usd", response_model=WalletActionResponse, status_code=201)
 async def send_usd_to_user(
     data: SendUsdToUserRequest,
@@ -1109,7 +1214,7 @@ async def admin_adjust_usd_wallet(
     )
 
 
-@router.get("/admin/php-wallets", response_model=List[AdminUsdWalletEntry])
+@router.get("/admin/php-wallets", response_model=AdminPhpWalletListResponse)
 async def admin_list_php_wallets(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1125,28 +1230,22 @@ async def admin_list_php_wallets(
     )
     wallets = result.scalars().all()
 
-    # Build response enriched with telegram_username from AdminUser table
-    items: List[AdminUsdWalletEntry] = []
+    items: List[AdminPhpWalletEntry] = []
     for w in wallets:
-        # The wallet user_id is a telegram_id for PHP wallets
-        tg_id = w.user_id
-        admin_res = await db.execute(
-            select(AdminUser).where(AdminUser.telegram_id == tg_id)
-        )
-        admin = admin_res.scalar_one_or_none()
-        items.append(AdminUsdWalletEntry(
+        admin_username = await _get_admin_username(db, w.user_id)
+        items.append(AdminPhpWalletEntry(
             user_id=w.user_id,
-            telegram_username=admin.telegram_username if admin else None,
+            telegram_username=admin_username,
             balance=w.balance,
             wallet_id=w.id,
         ))
 
-    return items
+    return AdminPhpWalletListResponse(items=items, total=len(items))
 
 
-@router.post("/admin/php-wallets/{user_id}/adjust", response_model=WalletActionResponse)
+@router.post("/admin/php-wallets/{wallet_user_id:path}/adjust", response_model=WalletActionResponse)
 async def admin_adjust_php_wallet(
-    user_id: str,
+    wallet_user_id: str,
     data: AdminWalletAdjustRequest,
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1159,7 +1258,7 @@ async def admin_adjust_php_wallet(
     if data.amount == 0:
         raise HTTPException(status_code=400, detail="Amount must be non-zero")
 
-    wallet = await get_or_create_wallet(db, user_id, "PHP")
+    wallet = await get_or_create_wallet(db, wallet_user_id, "PHP")
     now = datetime.now()
     balance_before = wallet.balance
     txn_type = "admin_credit" if data.amount > 0 else "admin_debit"
@@ -1168,11 +1267,11 @@ async def admin_adjust_php_wallet(
     if data.amount < 0 and wallet.balance < adj_amount:
         raise HTTPException(status_code=400, detail=f"Insufficient balance (₱{wallet.balance:,.2f})")
 
-    wallet.balance = max(0.0, wallet.balance + data.amount)
+    wallet.balance = round(max(0.0, wallet.balance + data.amount), 2)
     wallet.updated_at = now
 
     txn = Wallet_transactions(
-        user_id=user_id,
+        user_id=wallet_user_id,
         wallet_id=wallet.id,
         transaction_type=txn_type,
         amount=adj_amount,
@@ -1187,16 +1286,16 @@ async def admin_adjust_php_wallet(
     await db.commit()
     await db.refresh(txn)
 
-    publish_wallet_event(user_id, wallet, txn_type, adj_amount, txn.id)
+    publish_wallet_event(wallet_user_id, wallet, txn_type, adj_amount, txn.id)
     logger.info(
-        "Admin wallet adjust: admin=%s target=%s amount=%s new_balance=%s",
-        current_user.id, user_id, data.amount, wallet.balance,
+        "Admin PHP wallet adjust: admin=%s target=%s amount=%s new_balance=%s",
+        current_user.id, wallet_user_id, data.amount, wallet.balance,
     )
 
     action = "credited" if data.amount > 0 else "debited"
     return WalletActionResponse(
         success=True,
-        message=f"Successfully {action} ₱{adj_amount:,.2f} PHP for {user_id}",
+        message=f"Successfully {action} ₱{adj_amount:,.2f} PHP for {wallet_user_id}",
         balance=wallet.balance,
         transaction_id=txn.id,
     )

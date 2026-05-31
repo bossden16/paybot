@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePaymentEvents } from '@/hooks/usePaymentEvents';
+import { walletApi } from '@/api/wallet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
+import { fmt, fmtUsd } from '@/lib/format';
 
 /** Extract a user-readable error message from a non-ok fetch Response. */
 async function getResponseError(res: Response, fallback: string): Promise<string> {
@@ -228,6 +230,13 @@ export default function Wallet() {
   const [sendUsdAmount, setSendUsdAmount] = useState('');
   const [sendUsdNote, setSendUsdNote] = useState('');
   const [sendUsdLoading, setSendUsdLoading] = useState(false);
+
+  // Internal wallet transfer state
+  const [transferRecipientUserId, setTransferRecipientUserId] = useState('');
+  const [transferCurrency, setTransferCurrency] = useState<'PHP' | 'USD'>('PHP');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferNote, setTransferNote] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
 
   const fetchWalletData = useCallback(async () => {
     if (!user) return;
@@ -466,6 +475,35 @@ export default function Wallet() {
     } finally { setSendUsdLoading(false); }
   };
 
+  const handleTransfer = async () => {
+    const amount = parseFloat(transferAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+
+    const recipientUserId = transferRecipientUserId.trim();
+    if (!recipientUserId) {
+      toast.error('Enter the recipient user ID');
+      return;
+    }
+
+    setTransferLoading(true);
+    try {
+      const data = await walletApi.transfer(recipientUserId, amount, transferCurrency, transferNote);
+      toast.success(data.message || `Transferred ${amount.toFixed(2)} ${transferCurrency} to ${recipientUserId}`);
+      setTransferRecipientUserId('');
+      setTransferAmount('');
+      setTransferNote('');
+      await fetchWalletData();
+    } catch (err) {
+      console.error('Wallet transfer failed:', err);
+      toast.error((err as Error)?.message || 'Wallet transfer failed');
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   const handleCopyAddress = () => {
     if (cryptoDepositInfo?.address) {
       navigator.clipboard.writeText(cryptoDepositInfo.address).then(() => {
@@ -518,7 +556,7 @@ export default function Wallet() {
                 <div>
                   <p className="text-blue-200 text-xs font-medium mb-1">Wallet Balance</p>
                   <p className="text-3xl font-bold text-white tracking-tight">
-                    {loading ? <Loader2 className="h-7 w-7 animate-spin" /> : `₱${phpBal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
+                    {loading ? <Loader2 className="h-7 w-7 animate-spin" /> : `₱${fmt(phpBal)}`}
                   </p>
                   <p className="text-blue-200 text-[10px] mt-1">Philippine Peso</p>
                 </div>
@@ -537,7 +575,7 @@ export default function Wallet() {
                 <div>
                   <p className="text-teal-100 text-xs font-medium mb-1">USD Wallet</p>
                   <p className="text-3xl font-bold text-white tracking-tight">
-                    {loading ? <Loader2 className="h-7 w-7 animate-spin" /> : `$${usdBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                    {loading ? <Loader2 className="h-7 w-7 animate-spin" /> : `$${fmtUsd(usdBal)}`}
                   </p>
                   <p className="text-teal-100 text-[10px] mt-1">US Dollar · via Crypto Topup</p>
                 </div>
@@ -593,6 +631,13 @@ export default function Wallet() {
                 >
                   <Send className="h-4 w-4 shrink-0" />
                   <span className="hidden sm:inline">Send USD</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="transfer"
+                  className="flex-1 h-full rounded-none data-[state=active]:bg-card data-[state=active]:text-blue-400 text-muted-foreground flex-col gap-0.5 py-2 text-xs sm:flex-row sm:gap-2 sm:text-sm sm:py-0"
+                >
+                  <LinkIcon className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Transfer</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="send-usdt"
@@ -1100,7 +1145,7 @@ export default function Wallet() {
                         <div className="rounded-lg border border-border/50 bg-muted/40 divide-y divide-slate-600/30 text-sm">
                           <div className="flex items-center justify-between px-4 py-2.5">
                             <span className="text-muted-foreground">Amount</span>
-                            <span className="text-foreground font-semibold">₱{parseFloat(topupAmount || '0').toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-foreground font-semibold">₱{fmt(parseFloat(topupAmount || '0'))}</span>
                           </div>
                           <div className="flex items-center justify-between px-4 py-2.5">
                             <span className="text-muted-foreground">Bank</span>
@@ -1244,7 +1289,7 @@ export default function Wallet() {
                     <Send className="h-4 w-4 text-emerald-400 shrink-0" />
                     <span className="text-emerald-300 text-sm font-medium">USD Wallet Balance</span>
                   </div>
-                  <span className="text-foreground font-bold text-sm">${usdBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-foreground font-bold text-sm">${fmtUsd(usdBal)}</span>
                 </div>
 
                 <div className="space-y-3">
@@ -1307,7 +1352,7 @@ export default function Wallet() {
                     <Bitcoin className="h-4 w-4 text-teal-400 shrink-0" />
                     <span className="text-teal-300 text-sm font-medium">USD Wallet Balance</span>
                   </div>
-                  <span className="text-foreground font-bold text-sm">${usdBal.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT</span>
+                  <span className="text-foreground font-bold text-sm">${fmtUsd(usdBal)} USDT</span>
                 </div>
 
                 {/* Warning */}
@@ -1478,11 +1523,11 @@ export default function Wallet() {
                       </div>
                       <div className="text-right ml-2 shrink-0">
                         <p className={`text-sm font-mono font-semibold ${isCredit ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {config.sign}{isCrypto ? '$' : '₱'}{txn.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {config.sign}{isCrypto ? '$' : '₱'}{fmt(txn.amount)}
                         </p>
                         {txn.balance_after != null && (
                           <p className="text-[10px] text-muted-foreground">
-                            Bal: {isCrypto ? '$' : '₱'}{txn.balance_after.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            Bal: {isCrypto ? '$' : '₱'}{fmt(txn.balance_after)}
                           </p>
                         )}
                       </div>
