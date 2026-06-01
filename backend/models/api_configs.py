@@ -1,5 +1,5 @@
 from core.database import Base
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, UniqueConstraint
 
 
 class Api_configs(Base):
@@ -7,6 +7,8 @@ class Api_configs(Base):
     __table_args__ = (
         # Index for per-user list queries
         Index("idx_api_configs_user_id", "user_id"),
+        # Ensure a given service_name + config_key pair is unique
+        UniqueConstraint("service_name", "config_key", name="uq_api_configs_service_key"),
         {"extend_existing": True},
     )
 

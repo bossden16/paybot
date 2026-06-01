@@ -46,7 +46,8 @@ async def list_api_keys(
     _require_super_admin(current_user)
     svc = Api_configsService(db)
     query = {"service_name": service_name} if service_name else None
-    result = await svc.get_list(skip=0, limit=1000, query_dict=query)
+    result = await svc.get_list(skip=0, limit=1000, query_dict=query, reveal=False)
+    # return masked list by default
     return result["items"]
 
 
@@ -59,15 +60,7 @@ async def upsert_api_key(
     _require_super_admin(current_user)
     svc = Api_configsService(db)
     # Try find existing by service_name + config_key
-    existing = await svc.get_by_field("service_name", data.service_name)
-    # get_by_field returns one entry — we need to search for exact key combination
-    # Fallback: list and filter
-    items = (await svc.get_list(skip=0, limit=1000, query_dict={"service_name": data.service_name}))
-    found = None
-    for it in items["items"]:
-        if getattr(it, "config_key", "") == data.config_key:
-            found = it
-            break
+    found = await svc.get_by_service_and_key(data.service_name, data.config_key)
 
     payload = {
         "service_name": data.service_name,
@@ -77,10 +70,16 @@ async def upsert_api_key(
     }
 
     if found:
-        updated = await svc.update(found.id, payload, user_id=str(current_user.id))
+        await svc.update(found.id, payload, user_id=str(current_user.id))
+        # return masked record
+        updated = await svc.get_by_id(found.id)
+        if updated:
+            updated.config_value = '••••••••'
         return updated
 
     created = await svc.create(payload, user_id=str(current_user.id))
+    if created:
+        created.config_value = '••••••••'
     return created
 
 

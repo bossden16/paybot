@@ -5,6 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.api_configs import Api_configs
+from core.mask_crypto import encrypt_text, decrypt_text, key_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,11 @@ class Api_configsService:
         try:
             if user_id:
                 data['user_id'] = user_id
+            # Encrypt config_value if present and not already encrypted
+            if 'config_value' in data and data['config_value']:
+                raw = data['config_value']
+                if not (isinstance(raw, str) and raw.startswith(key_prefix)):
+                    data['config_value'] = encrypt_text(str(raw))
             obj = Api_configs(**data)
             self.db.add(obj)
             await self.db.commit()
@@ -39,6 +45,10 @@ class Api_configsService:
             for data in items:
                 if user_id:
                     data = {**data, 'user_id': user_id}
+                if 'config_value' in data and data['config_value']:
+                    raw = data['config_value']
+                    if not (isinstance(raw, str) and raw.startswith(key_prefix)):
+                        data['config_value'] = encrypt_text(str(raw))
                 objs.append(Api_configs(**data))
             self.db.add_all(objs)
             await self.db.commit()
@@ -67,7 +77,8 @@ class Api_configsService:
             if user_id:
                 query = query.where(Api_configs.user_id == user_id)
             result = await self.db.execute(query)
-            return result.scalar_one_or_none()
+            obj = result.scalar_one_or_none()
+            return obj
         except Exception as e:
             logger.error(f"Error fetching api_configs {obj_id}: {str(e)}")
             raise
@@ -79,6 +90,7 @@ class Api_configsService:
         user_id: Optional[str] = None,
         query_dict: Optional[Dict[str, Any]] = None,
         sort: Optional[str] = None,
+        reveal: bool = False,
     ) -> Dict[str, Any]:
         """Get paginated list of api_configss (user can only see their own records)"""
         try:
@@ -112,6 +124,24 @@ class Api_configsService:
             result = await self.db.execute(query.offset(skip).limit(limit))
             items = result.scalars().all()
 
+            # Decrypt or mask config_value depending on reveal flag
+            for it in items:
+                try:
+                    val = getattr(it, 'config_value', None)
+                    if val:
+                        if reveal:
+                            if isinstance(val, str) and val.startswith(key_prefix):
+                                try:
+                                    setattr(it, 'config_value', decrypt_text(val))
+                                except Exception:
+                                    # leave as-is if decryption fails
+                                    pass
+                        else:
+                            # mask the secret
+                            setattr(it, 'config_value', '••••••••')
+                except Exception:
+                    continue
+
             return {
                 "items": items,
                 "total": total,
@@ -130,6 +160,11 @@ class Api_configsService:
                 logger.warning(f"Api_configs {obj_id} not found for update")
                 return None
             for key, value in update_data.items():
+                if key == 'config_value' and value:
+                    # encrypt before storing
+                    raw = value
+                    if not (isinstance(raw, str) and raw.startswith(key_prefix)):
+                        value = encrypt_text(str(raw))
                 if hasattr(obj, key) and key != 'user_id':
                     setattr(obj, key, value)
 
@@ -169,6 +204,21 @@ class Api_configsService:
             return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Error fetching api_configs by {field_name}: {str(e)}")
+            raise
+
+    async def get_by_service_and_key(self, service_name: str, config_key: str, user_id: Optional[str] = None) -> Optional[Api_configs]:
+        """Fetch a single Api_configs by service_name + config_key pair"""
+        try:
+            query = select(Api_configs).where(
+                Api_configs.service_name == service_name,
+                Api_configs.config_key == config_key,
+            )
+            if user_id:
+                query = query.where(Api_configs.user_id == user_id)
+            result = await self.db.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error fetching api_configs by service+key: {str(e)}")
             raise
 
     async def list_by_field(
