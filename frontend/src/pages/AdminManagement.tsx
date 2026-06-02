@@ -32,7 +32,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────[...]
 
 interface AdminUser {
   id: number;
@@ -73,9 +73,9 @@ interface CryptoTopupRequest {
   created_at: string | null;
 }
 
-type AdminTab = 'admins' | 'users' | 'roles' | 'crypto' | 'php-wallets' | 'usd-wallets' | 'php-wallets';
+type AdminTab = 'admins' | 'users' | 'roles' | 'crypto' | 'php-wallets' | 'usd-wallets';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────[...]
 
 const PERMISSION_KEYS: { key: keyof AdminUser; label: string; color: string }[] = [
   { key: 'can_manage_payments', label: 'Payments', color: 'blue' },
@@ -237,7 +237,7 @@ function formatDate(dt: string | null): string {
   return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// ── Admin Users Tab ───────────────────────────────────────────────────────────
+// ── Admin Users Tab ──────────────────────────────────────────────────────────[...]
 
 function AdminCard({
   admin,
@@ -585,7 +585,7 @@ function RoleManagementTab({
       <div className="flex items-start gap-2.5 bg-blue-500/8 border border-blue-500/20 rounded-lg px-4 py-3">
         <Shield className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Role presets are permission templates. Applying a preset to an admin instantly updates all their permissions to match the role. You can still fine-tune individual permissions afterward in the Admin Users tab.
+          Role presets are permission templates. Applying a preset to an admin instantly updates all their permissions to match the role. You can still fine-tune individual permissions afterward [...]
         </p>
       </div>
 
@@ -657,7 +657,7 @@ function RoleManagementTab({
                           key={admin.id}
                           onClick={() => applyRole(preset, admin)}
                           disabled={!!applying}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-all duration-150 disabled:opacity-50"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground tran[...]
                         >
                           {isApplying ? (
                             <div className="h-3 w-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin" />
@@ -1037,14 +1037,14 @@ function UsdWalletsTab({ onError }: { onError: (msg: string) => void }) {
                   placeholder="Amount"
                   value={adjustAmount[w.user_id] || ''}
                   onChange={e => setAdjustAmount(prev => ({ ...prev, [w.user_id]: e.target.value }))}
-                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/40 transition-colors"
+                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:rin[...]
                 />
                 <input
                   type="text"
                   placeholder="Note (optional)"
                   value={adjustNote[w.user_id] || ''}
                   onChange={e => setAdjustNote(prev => ({ ...prev, [w.user_id]: e.target.value }))}
-                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/40 transition-colors"
+                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:rin[...]
                 />
               </div>
               <div className="flex gap-2">
@@ -1183,14 +1183,14 @@ function PhpWalletsTab({ onError }: { onError: (msg: string) => void }) {
                   placeholder="Amount"
                   value={adjustAmount[w.user_id] || ''}
                   onChange={e => setAdjustAmount(prev => ({ ...prev, [w.user_id]: e.target.value }))}
-                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-colors"
+                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:rin[...]
                 />
                 <input
                   type="text"
                   placeholder="Note (optional)"
                   value={adjustNote[w.user_id] || ''}
                   onChange={e => setAdjustNote(prev => ({ ...prev, [w.user_id]: e.target.value }))}
-                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-colors"
+                  className="flex-1 bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:rin[...]
                 />
               </div>
               <div className="flex gap-2">
@@ -1221,7 +1221,7 @@ function PhpWalletsTab({ onError }: { onError: (msg: string) => void }) {
 
 
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Main Page ──────────────────────────────────────────────────────────[...]
 
 export default function AdminManagement() {
   const { isSuperAdmin, permissions } = useAuth();
@@ -1501,11 +1501,6 @@ export default function AdminManagement() {
       label: 'USD Wallets',
       icon: <WalletIcon className="h-3.5 w-3.5" />,
     }] : []),
-      ...(isSuperAdmin ? [{
-        id: 'php-wallets',
-        label: 'PHP Wallets',
-        icon: <WalletIcon className="h-3.5 w-3.5" />,
-      }] : []),
   ];
 
   return (
@@ -1638,7 +1633,7 @@ export default function AdminManagement() {
                         placeholder="e.g. 123456789"
                         value={form.telegram_id}
                         onChange={e => setForm(f => ({ ...f, telegram_id: e.target.value }))}
-                        className="w-full bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-colors"
+                        className="w-full bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus[...]
                       />
                     </div>
                     <div>
@@ -1648,7 +1643,7 @@ export default function AdminManagement() {
                         placeholder="@username"
                         value={form.telegram_username}
                         onChange={e => setForm(f => ({ ...f, telegram_username: e.target.value }))}
-                        className="w-full bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-colors"
+                        className="w-full bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus[...]
                       />
                     </div>
                     <div>
@@ -1658,7 +1653,7 @@ export default function AdminManagement() {
                         placeholder="Full name"
                         value={form.name}
                         onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                        className="w-full bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-colors"
+                        className="w-full bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus[...]
                       />
                     </div>
                   </div>
@@ -1671,7 +1666,7 @@ export default function AdminManagement() {
                           onClick={() => setForm(f => ({ ...f, is_super_admin: !f.is_super_admin }))}
                           className={`w-8 h-5 rounded-full relative transition-colors duration-200 cursor-pointer flex-shrink-0 ${form.is_super_admin ? 'bg-amber-500' : 'bg-muted'}`}
                         >
-                          <div className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${form.is_super_admin ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                          <div className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${form.is_super_admin ? 'translate-x-3.5' : 'translate-x-0.[...]
                         </div>
                         <span className={`text-xs font-semibold ${form.is_super_admin ? 'text-amber-400' : 'text-muted-foreground'}`}>Super Admin</span>
                       </label>
@@ -1795,10 +1790,6 @@ export default function AdminManagement() {
         {/* ── USD Wallets Tab ── */}
         {activeTab === 'usd-wallets' && isSuperAdmin && (
           <UsdWalletsTab onError={setError} />
-        )}
-        {/* ── PHP Wallets Tab ── */}
-        {activeTab === 'php-wallets' && isSuperAdmin && (
-          <PhpWalletsTab onError={setError} />
         )}
       </div>
     </Layout>
