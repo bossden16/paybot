@@ -16,7 +16,7 @@ MAYA_LIVE_BASE_URL = "https://pg.maya.ph/checkout/v1"
 
 # Maya Business API endpoints (Payments/QR/Vault)
 MAYA_BUSINESS_SANDBOX_URL = "https://pg-sandbox.paymaya.com"
-MAYA_BUSINESS_LIVE_URL = "https://pg.maya.ph"
+MAYA_BUSINESS_LIVE_URL = "https://api.paymaya.com"
 
 
 class MayaService:
@@ -547,30 +547,47 @@ class MayaService:
             headers = self._get_business_api_headers()
 
             async with httpx.AsyncClient() as client:
-                # New endpoint for Dynamic QR (PWM)
                 response = await client.post(
-                    f"{base_url}/payments/v1/qr/payments",
-                    json=payload,
+                    f"{base_url}/checkout/v1/checkouts",
+                    json={
+                        **payload,
+                        "items": [
+                            {
+                                "name": description or "Maya QR Payment",
+                                "code": "QR",
+                                "quantity": 1,
+                                "unitPrice": {"value": amount_val, "currency": "PHP"},
+                                "totalAmount": {"value": amount_val, "currency": "PHP"},
+                            }
+                        ],
+                    },
                     headers=headers,
                     timeout=30.0,
                 )
                 response.raise_for_status()
                 data = response.json()
 
+                checkout_url = ""
+                if isinstance(data.get("redirectUrl"), dict):
+                    checkout_url = data["redirectUrl"].get("success", "")
+                elif isinstance(data.get("checkoutUrl"), str):
+                    checkout_url = data["checkoutUrl"]
+                elif isinstance(data.get("redirect_url"), str):
+                    checkout_url = data["redirect_url"]
+
                 return {
                     "success": True,
-                    "qr_id": data.get("paymentId") or data.get("id", ""),
+                    "qr_id": data.get("id", ""),
                     "qr_content": data.get("qrCodeBody") or data.get("qrContent", ""),
-                    "redirect_url": data.get("redirectUrl", ""),
+                    "redirect_url": checkout_url,
                     "external_id": external_id,
                     "amount": amount,
-                    "status": "CREATED",
+                    "status": data.get("status", "CREATED"),
                     "response": data,
                 }
         except httpx.HTTPStatusError as exc:
             logger.error("Maya QR creation failed: %s", exc.response.text)
-            # Fallback: Many merchants use the standard Checkout API even for QR
-            return await self.create_checkout(amount, description, external_id=external_id)
+            return {"success": False, "error": exc.response.text}
         except Exception as exc:
             logger.error("Maya QR creation error: %s", exc)
             return {"success": False, "error": str(exc)}
