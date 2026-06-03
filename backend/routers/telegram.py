@@ -298,6 +298,24 @@ _CMD_STEPS: Dict[str, List[Dict]] = {
         {"key": "amount",   "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
         {"key": "provider", "type": "str",   "prompt": "📱 Enter the <b>provider</b>:\n<i>GCASH · MAYA · GRABPAY</i>"},
     ],
+    "/alipay": [
+        {"key": "amount",      "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
+        {"key": "description", "type": "str",   "prompt": "📝 Enter the <b>description</b>:\n<i>e.g. Alipay payment</i>\n\nOr type <code>skip</code> to use the default.", "optional": True, "default": "Alipay payment"},
+    ],
+    "/wechat": [
+        {"key": "amount",      "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
+        {"key": "description", "type": "str",   "prompt": "📝 Enter the <b>description</b>:\n<i>e.g. WeChat payment</i>\n\nOr type <code>skip</code> to use the default.", "optional": True, "default": "WeChat payment"},
+    ],
+    "/disburse": [
+        {"key": "bank",    "type": "str",   "prompt": "🏦 Enter the <b>bank code</b>:\n<i>BDO · BPI · UNIONBANK · METROBANK · LANDBANK · PNB · RCBC</i>"},
+        {"key": "account", "type": "str",   "prompt": "🔢 Enter the <b>account number</b>:\n<i>e.g. 1234567890</i>"},
+        {"key": "name",    "type": "str",   "prompt": "👤 Enter the <b>account holder name</b>:\n<i>e.g. Juan Dela Cruz</i>"},
+        {"key": "amount",  "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 1000</i>"},
+    ],
+    "/refund": [
+        {"key": "id",     "type": "str",   "prompt": "🆔 Enter the <b>transaction ID</b> to refund:\n<i>e.g. INV-xxx</i>"},
+        {"key": "amount", "type": "float", "prompt": "💰 Enter the <b>refund amount</b> in PHP:\n<i>e.g. 500</i>"},
+    ],
     "/pos": [
         {"key": "amount",         "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
         {"key": "description",    "type": "str",   "prompt": "📝 Enter the <b>description</b>:\n<i>e.g. Retail Sale</i>\n\nOr type <code>skip</code> to use the default.", "optional": True, "default": "POS Sale"},
@@ -2200,7 +2218,11 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 await tg.send_message(chat_id, _wizard_start(chat_id, "/disburse"))
             else:
                 try:
-                    amount = float(parts[1])
+                    bank_code = parts[1].upper()
+                    account_number = parts[2]
+                    account_name = parts[3]
+                    amount = float(parts[4])
+
                     if amount <= 0:
                         await tg.send_message(chat_id, "❌ Amount must be greater than zero.")
                         await _safe_log(db, chat_id, username, text)
@@ -2228,9 +2250,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         )
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
-                    bank_code = parts[2].upper()
-                    account_number = parts[3]
-                    account_name = parts[4]
+
                     xendit = MayaService()
                     result = await xendit.create_disbursement(
                         amount=amount, bank_code=bank_code,
