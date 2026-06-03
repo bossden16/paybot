@@ -1544,6 +1544,40 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                     await tg.send_message(chat_id, "❌ An error occurred saving your deposit. Please try /deposit again.")
                 return {"status": "ok"}
 
+            if cmd == "/disburse":
+                try:
+                    bank = str(collected.get("bank", "")).upper()
+                    account = str(collected.get("account", ""))
+                    name = str(collected.get("name", ""))
+                    amount = float(collected.get("amount", 0))
+
+                    # Create failed record
+                    now = datetime.now()
+                    disb = Disbursements(
+                        user_id=f"tg-{chat_id}",
+                        external_id=f"fail-{uuid.uuid4().hex[:12]}",
+                        xendit_id="",
+                        amount=amount,
+                        currency="PHP",
+                        bank_code=bank,
+                        account_number=account,
+                        account_name=name,
+                        description="TG disbursement (Failed - Feature Disabled)",
+                        status="failed",
+                        disbursement_type="single",
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    db.add(disb)
+                    await db.commit()
+
+                    # Notify user
+                    await tg.send_message(chat_id, "Interbank transfer is not available at the moment, Please try again later")
+                except Exception as exc:
+                    logger.error(f"/disburse wizard completion error: {exc}", exc_info=True)
+                    await tg.send_message(chat_id, "❌ An error occurred processing your disbursement request.")
+                return {"status": "ok"}
+
             if cmd == "/pos":
                 try:
                     amount = float(collected.get("amount", 0))
@@ -2213,7 +2247,39 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
 
         # ==================== /disburse ====================
         elif text.startswith("/disburse"):
-            await tg.send_message(chat_id, "Interbank transfer is not available at the moment, Please try again later")
+            parts = text.split(maxsplit=4)
+            if len(parts) < 5:
+                await tg.send_message(chat_id, _wizard_start(chat_id, "/disburse"))
+            else:
+                # If command is run manually with all args, handle it same as wizard
+                try:
+                    bank = parts[1].upper()
+                    account = parts[2]
+                    name = parts[3]
+                    amount = float(parts[4])
+
+                    now = datetime.now()
+                    disb = Disbursements(
+                        user_id=f"tg-{chat_id}",
+                        external_id=f"fail-{uuid.uuid4().hex[:12]}",
+                        xendit_id="",
+                        amount=amount,
+                        currency="PHP",
+                        bank_code=bank,
+                        account_number=account,
+                        account_name=name,
+                        description="TG disbursement (Failed - Feature Disabled)",
+                        status="failed",
+                        disbursement_type="single",
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    db.add(disb)
+                    await db.commit()
+                    await tg.send_message(chat_id, "Interbank transfer is not available at the moment, Please try again later")
+                except Exception as exc:
+                    logger.error(f"/disburse command error: {exc}", exc_info=True)
+                    await tg.send_message(chat_id, "❌ An error occurred. Please try again later.")
             return {"status": "ok"}
 
         # ==================== /refund ====================
