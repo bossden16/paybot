@@ -252,7 +252,9 @@ async def create_disbursements(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new disbursements. Requires sufficient PHP wallet balance."""
+    """Create a new disbursements (Dashboard Entity API).
+    Requires sufficient PHP wallet balance and creates a pending request.
+    """
     logger.debug(f"Creating new disbursements with data: {data}")
 
     user_id = str(current_user.id)
@@ -262,15 +264,58 @@ async def create_disbursements(
 
     service = DisbursementsService(db)
     try:
-        result = await service.create(data.model_dump(), user_id=user_id)
+        # 1. Create a pending Disbursement record
+        import uuid
+        now = datetime.now()
+        ext_id = f"wd-ent-{uuid.uuid4().hex[:12]}"
+
+        create_data = data.model_dump()
+        create_data["status"] = "pending"
+        create_data["external_id"] = ext_id
+
+        result = await service.create(create_data, user_id=user_id)
         if not result:
             raise HTTPException(status_code=400, detail="Failed to create disbursements")
 
-        # Deduct from PHP wallet on successful creation
-        await _deduct_php_balance(
-            db, wallet, user_id, data.amount,
-            f"Disbursement to {data.account_name or data.account_number or 'recipient'}: {data.description or ''}",
+        # 2. Deduct from PHP wallet immediately (place on hold)
+        balance_before = wallet.balance
+        wallet.balance = round(wallet.balance - data.amount, 2)
+        wallet.updated_at = now
+
+        # 3. Record the ledger entry
+        wtxn = Wallet_transactions(
+            user_id=user_id,
+            wallet_id=wallet.id,
+            transaction_type="withdraw",
+            amount=data.amount, # Amount is positive in ledger for type 'withdraw'
+            balance_before=balance_before,
+            balance_after=wallet.balance,
+            note=f"Disbursement request to {data.account_name or data.account_number or 'recipient'}: {data.description or ''}",
+            status="pending",
+            reference_id=ext_id,
+            created_at=now,
         )
+        db.add(wtxn)
+        await db.commit()
+
+        # 4. Notify Super Admin (if bot is connected)
+        try:
+            from core.config import settings
+            from services.telegram_service import TelegramService
+            owner_id = str(getattr(settings, "telegram_bot_owner_id", "") or "").strip()
+            if owner_id:
+                tg = TelegramService()
+                await tg.send_message(
+                    owner_id,
+                    f"🔔 <b>New Disbursement Request (API)</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 From: {current_user.name} (ID: {user_id})\n"
+                    f"💰 Amount: <b>₱{data.amount:,.2f}</b>\n"
+                    f"🏦 Bank: {data.bank_code}\n"
+                    f"🆔 Ref: <code>{ext_id}</code>"
+                )
+        except Exception:
+            pass
 
         logger.info(f"Disbursements created successfully with id: {result.id}")
         return result

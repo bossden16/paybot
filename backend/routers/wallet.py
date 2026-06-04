@@ -420,45 +420,120 @@ async def send_money(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Send money from wallet to another user"""
+    """Internal wallet transfer (Dashboard version).
+    Mirrors Telegram /send logic by looking up the recipient.
+    """
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
 
-    user_id = str(current_user.id)
-    wallet = await get_or_create_wallet(db, user_id)
+    sender_id = str(current_user.id)
+    recipient_identifier = data.recipient.strip().lstrip("@")
 
-    if wallet.balance < data.amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+    # 1. Lookup recipient (mirrors _get_or_promote_recipient in telegram.py)
+    from models.admin_users import AdminUser
+    from models.kyb_registrations import KybRegistration
 
+    # Try username
+    res = await db.execute(select(AdminUser).where(func.lower(AdminUser.telegram_username) == recipient_identifier.lower()))
+    recipient_admin = res.scalar_one_or_none()
+
+    if not recipient_admin:
+        # Try ID match
+        res = await db.execute(select(AdminUser).where(AdminUser.telegram_id == recipient_identifier))
+        recipient_admin = res.scalar_one_or_none()
+
+    if not recipient_admin:
+        # Try KYB promotion
+        res = await db.execute(
+            select(KybRegistration).where(
+                (func.lower(KybRegistration.telegram_username) == recipient_identifier.lower()) |
+                (KybRegistration.chat_id == recipient_identifier)
+            )
+        )
+        kyb = res.scalar_one_or_none()
+        if kyb and kyb.status == "approved":
+            recipient_admin = AdminUser(
+                telegram_id=kyb.chat_id,
+                telegram_username=kyb.telegram_username,
+                name=kyb.full_name or kyb.telegram_username or kyb.chat_id,
+                is_active=True,
+                can_manage_payments=True,
+                can_manage_wallet=True,
+                added_by="system_dashboard_send",
+            )
+            db.add(recipient_admin)
+            await db.flush()
+
+    if not recipient_admin:
+        raise HTTPException(status_code=404, detail=f"Recipient '{data.recipient}' not found in the system.")
+
+    recipient_id = str(recipient_admin.telegram_id)
+    if sender_id == recipient_id:
+        raise HTTPException(status_code=400, detail="Cannot send money to yourself")
+
+    # 2. Get wallets
+    sender_wallet = await get_or_create_wallet(db, sender_id, "PHP")
+    recipient_wallet = await get_or_create_wallet(db, recipient_id, "PHP")
+
+    if sender_wallet.balance < data.amount:
+        raise HTTPException(status_code=400, detail=f"Insufficient balance (₱{sender_wallet.balance:,.2f})")
+
+    # 3. Perform internal transfer
     now = datetime.now()
-    balance_before = wallet.balance
-    wallet.balance -= data.amount
-    wallet.updated_at = now
+    import uuid
+    ref_id = f"trf-{uuid.uuid4().hex[:8]}"
 
-    txn = Wallet_transactions(
-        user_id=user_id,
-        wallet_id=wallet.id,
+    # Debit sender
+    sender_bal_before = sender_wallet.balance
+    sender_wallet.balance = round(sender_wallet.balance - data.amount, 2)
+    sender_wallet.updated_at = now
+
+    sender_txn = Wallet_transactions(
+        user_id=sender_id,
+        wallet_id=sender_wallet.id,
         transaction_type="send",
         amount=data.amount,
-        balance_before=balance_before,
-        balance_after=wallet.balance,
-        recipient=data.recipient,
-        note=data.note or f"Sent to {data.recipient}",
+        balance_before=sender_bal_before,
+        balance_after=sender_wallet.balance,
+        recipient=f"@{recipient_admin.telegram_username}" if recipient_admin.telegram_username else recipient_id,
+        note=data.note or f"Transfer to {recipient_id}",
         status="completed",
-        reference_id=f"send-{wallet.id}-{int(now.timestamp())}",
+        reference_id=ref_id,
         created_at=now,
     )
-    db.add(txn)
-    await db.commit()
-    await db.refresh(txn)
 
-    publish_wallet_event(user_id, wallet, "send", data.amount, txn.id, data.note)
+    # Credit recipient
+    recipient_bal_before = recipient_wallet.balance
+    recipient_wallet.balance = round(recipient_wallet.balance + data.amount, 2)
+    recipient_wallet.updated_at = now
+
+    recipient_txn = Wallet_transactions(
+        user_id=recipient_id,
+        wallet_id=recipient_wallet.id,
+        transaction_type="receive",
+        amount=data.amount,
+        balance_before=recipient_bal_before,
+        balance_after=recipient_wallet.balance,
+        recipient=current_user.name or sender_id,
+        note=data.note or f"Transfer from {sender_id}",
+        status="completed",
+        reference_id=ref_id,
+        created_at=now,
+    )
+
+    db.add(sender_txn)
+    db.add(recipient_txn)
+    await db.commit()
+
+    # 4. Notify both parties
+    publish_wallet_event(sender_id, sender_wallet, "send", data.amount, sender_txn.id, data.note)
+    publish_wallet_event(recipient_id, recipient_wallet, "receive", data.amount, recipient_txn.id, data.note)
 
     return WalletActionResponse(
         success=True,
-        message=f"Successfully sent {data.amount} to {data.recipient}",
-        balance=wallet.balance,
-        transaction_id=txn.id,
+        message=f"Successfully sent ₱{data.amount:,.2f} to {recipient_admin.name or data.recipient}",
+        balance=sender_wallet.balance,
+        transaction_id=sender_txn.id,
     )
 
 @router.post("/withdraw", response_model=WalletActionResponse)
@@ -467,22 +542,47 @@ async def withdraw_money(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Withdraw money from wallet"""
+    """Withdraw money from wallet (Dashboard version).
+    Creates a pending disbursement request that requires Super Admin approval.
+    """
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
 
     user_id = str(current_user.id)
-    wallet = await get_or_create_wallet(db, user_id)
+    wallet = await get_or_create_wallet(db, user_id, "PHP")
 
     if wallet.balance < data.amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+        raise HTTPException(status_code=400, detail=f"Insufficient balance (₱{wallet.balance:,.2f})")
 
     now = datetime.now()
     balance_before = wallet.balance
-    wallet.balance -= data.amount
+
+    # 1. Create a pending Disbursement record
+    from models.disbursements import Disbursements
+    import uuid
+
+    ext_id = f"wd-db-{uuid.uuid4().hex[:12]}"
+    disb = Disbursements(
+        user_id=user_id,
+        external_id=ext_id,
+        amount=data.amount,
+        currency="PHP",
+        bank_code=data.bank_name or "Manual",
+        account_number=data.account_number or "Manual",
+        account_name=current_user.name or user_id,
+        description=data.note or "Withdrawal request via Dashboard",
+        status="pending",
+        disbursement_type="single",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(disb)
+
+    # 2. Deduct from wallet immediately (place on hold)
+    wallet.balance = round(wallet.balance - data.amount, 2)
     wallet.updated_at = now
 
-    bank_info = f"{data.bank_name} {data.account_number}".strip()
+    # 3. Record the ledger entry
     txn = Wallet_transactions(
         user_id=user_id,
         wallet_id=wallet.id,
@@ -490,21 +590,40 @@ async def withdraw_money(
         amount=data.amount,
         balance_before=balance_before,
         balance_after=wallet.balance,
-        recipient=bank_info or "Bank withdrawal",
-        note=data.note or "Bank withdrawal",
-        status="completed",
-        reference_id=f"withdraw-{wallet.id}-{int(now.timestamp())}",
+        recipient=f"{data.bank_name} {data.account_number}".strip() or "Bank withdrawal",
+        note=data.note or "Bank withdrawal request",
+        status="pending", # Pending approval
+        reference_id=ext_id,
         created_at=now,
     )
     db.add(txn)
     await db.commit()
     await db.refresh(txn)
 
-    publish_wallet_event(user_id, wallet, "withdraw", data.amount, txn.id, data.note)
+    # 4. Notify Super Admin (if bot is connected)
+    try:
+        from services.telegram_service import TelegramService
+        owner_id = str(getattr(settings, "telegram_bot_owner_id", "") or "").strip()
+        if owner_id:
+            tg = TelegramService()
+            await tg.send_message(
+                owner_id,
+                f"🔔 <b>New Dashboard Withdrawal Request</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 From: {current_user.name} (ID: {user_id})\n"
+                f"💰 Amount: <b>₱{data.amount:,.2f}</b>\n"
+                f"🏦 Bank: {data.bank_name}\n"
+                f"🔢 Account: <code>{data.account_number}</code>\n"
+                f"🆔 Ref: <code>{ext_id}</code>"
+            )
+    except Exception as e:
+        logger.warning(f"Failed to notify super admin of dashboard withdrawal: {e}")
+
+    publish_wallet_event(user_id, wallet, "withdraw", data.amount, txn.id, data.note, skip_bot_notify=True)
 
     return WalletActionResponse(
         success=True,
-        message=f"Successfully withdrew {data.amount}",
+        message="Withdrawal request submitted. The bank will now validating your withdraw, pleease wait for your balance credited to your bank patiently",
         balance=wallet.balance,
         transaction_id=txn.id,
     )
