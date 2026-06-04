@@ -306,19 +306,19 @@ export default function Dashboard() {
 
               <div className="flex items-center gap-4 self-start lg:self-center">
                 <div className="flex items-center gap-2 bg-black/20 backdrop-blur-2xl p-1.5 rounded-[2rem] border border-white/10 shadow-2xl">
-                  <div className="text-center px-8 py-4">
-                    <p className="text-2xl sm:text-3xl font-black text-white tracking-tighter tabular-nums">
-                      {loading ? '---' : stats.total_count}
-                    </p>
-                    <p className="text-brand-blue-50/40 text-[9px] font-black uppercase tracking-widest mt-1">Total</p>
-                  </div>
-                  <div className="w-px h-12 bg-white/10 mx-1" />
-                  <div className="text-center px-8 py-4">
-                    <p className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tighter tabular-nums">
-                      {loading ? '---' : stats.paid_count}
-                    </p>
-                    <p className="text-brand-blue-50/40 text-[9px] font-black uppercase tracking-widest mt-1">Success</p>
-                  </div>
+                      <div className="text-center px-8 py-4">
+                        <p className="text-2xl sm:text-3xl font-black text-white tracking-tighter tabular-nums">
+                          {loading ? '---' : stats.total_count}
+                        </p>
+                        <p className="text-brand-blue-50/40 text-[9px] font-black uppercase tracking-widest mt-1">Total</p>
+                      </div>
+                      <div className="w-px h-12 bg-white/10 mx-1" />
+                      <div className="text-center px-8 py-4">
+                        <p className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tighter tabular-nums">
+                          {loading ? '---' : stats.paid_count}
+                        </p>
+                        <p className="text-brand-blue-50/40 text-[9px] font-black uppercase tracking-widest mt-1">Success</p>
+                      </div>
                 </div>
                 <Button
                   variant="ghost"
@@ -343,7 +343,7 @@ export default function Dashboard() {
                   <div className="h-10 w-10 bg-white/20 rounded-2xl flex items-center justify-center shadow-inner"><Wallet className="h-5 w-5 text-white" /></div>
                   <p className="text-[10px] font-black text-white/70 uppercase tracking-[0.2em]">PHP Wallet</p>
                 </div>
-                <p className="text-4xl font-black text-white tracking-tighter">
+                <p className="text-4xl font-black text-white tracking-tighter tabular-nums">
                   {loading ? '₱ --.--' : `₱${fmt(walletBalance || 0)}`}
                 </p>
               </CardContent>
@@ -358,7 +358,7 @@ export default function Dashboard() {
                   <div className="h-10 w-10 bg-white/20 rounded-2xl flex items-center justify-center shadow-inner"><Zap className="h-5 w-5 text-white" /></div>
                   <p className="text-[10px] font-black text-white/70 uppercase tracking-[0.2em]">USDT Vault</p>
                 </div>
-                <p className="text-4xl font-black text-white tracking-tighter">
+                <p className="text-4xl font-black text-white tracking-tighter tabular-nums">
                   {loading ? '$ --.--' : `$${fmtUsd(usdWalletBalance)}`}
                 </p>
               </CardContent>
@@ -463,7 +463,7 @@ export default function Dashboard() {
                 ].map((r) => (
                   <div key={r.label} className="p-6 rounded-[2rem] bg-muted/20 border border-border/30">
                     <p className="text-[9px] font-black text-muted-foreground/70 uppercase tracking-[0.3em] mb-2">{r.label}</p>
-                    <p className={`text-2xl font-black ${r.color} tracking-tighter`}>{r.amount > 0 ? `₱${fmt(r.amount)}` : `${r.count || 0} OPS`}</p>
+                    <p className={`text-2xl font-black ${r.color} tracking-tighter tabular-nums`}>{r.amount > 0 ? `₱${fmt(r.amount)}` : `${r.count || 0} OPS`}</p>
                   </div>
                 ))}
              </div>
@@ -487,7 +487,7 @@ export default function Dashboard() {
                 <Clock className="h-6 w-6 text-brand-blue-500" />
                 <div>
                   <p className="text-[10px] font-black text-foreground uppercase tracking-[0.2em] mb-1">Last Sync</p>
-                  <p className="text-[11px] font-black text-brand-blue-500/80 tracking-widest">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  <p className="text-[11px] font-black text-brand-blue-500/80 tracking-widest tabular-nums">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
               </div>
           </Card>
