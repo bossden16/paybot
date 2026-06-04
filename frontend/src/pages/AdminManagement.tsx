@@ -19,6 +19,7 @@ import {
   UserPlus,
   AlertCircle,
   Shield,
+  Zap,
   ChevronDown,
   Clock,
   Mail,
