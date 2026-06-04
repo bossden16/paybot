@@ -23,8 +23,6 @@ import BotMessagesPage from './pages/BotMessagesPage';
 import TopupRequestsPage from './pages/TopupRequestsPage';
 import UsdtSendRequestsPage from './pages/UsdtSendRequestsPage';
 import BankDepositsPage from './pages/BankDepositsPage';
-import KybRegistrationsPage from './pages/KybRegistrationsPage';
-import KycVerificationsPage from './pages/KycVerificationsPage';
 import RolesPage from './pages/RolesPage';
 import RequireSuperAdmin from './components/RequireSuperAdmin';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
@@ -148,8 +146,6 @@ function AuthAwareShell() {
             <Route path="/topup-requests" element={<RequireSuperAdmin><TopupRequestsPage /></RequireSuperAdmin>} />
             <Route path="/usdt-send-requests" element={<RequireSuperAdmin><UsdtSendRequestsPage /></RequireSuperAdmin>} />
             <Route path="/bank-deposits" element={<RequireSuperAdmin><BankDepositsPage /></RequireSuperAdmin>} />
-            <Route path="/kyb-registrations" element={<RequireSuperAdmin><KybRegistrationsPage /></RequireSuperAdmin>} />
-            <Route path="/kyc-verifications" element={<RequireSuperAdmin><KycVerificationsPage /></RequireSuperAdmin>} />
             <Route path="/roles" element={<RequireSuperAdmin><RolesPage /></RequireSuperAdmin>} />
             <Route path="/policies" element={<Policies />} />
             <Route path="*" element={<NotFound />} />

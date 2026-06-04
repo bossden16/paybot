@@ -213,9 +213,6 @@ export default function HomePage() {
           <FeatureCard icon={Receipt} color="text-teal-400" bg="bg-teal-500/10"
             title="Digital Invoicing"
             description="Create branded invoices with auto-payment links. Track payment status and send automated reminders." />
-          <FeatureCard icon={Building2} color="text-orange-400" bg="bg-orange-500/10"
-            title="KYC / KYB Compliance"
-            description="Built-in identity verification workflows for merchants and customers, fully compliant with BSP regulations." />
         </div>
 
         <div className="mt-8 text-center">
@@ -341,7 +338,6 @@ export default function HomePage() {
               { label: 'Webhook Delivery', status: 'Operational', color: 'text-emerald-400' },
               { label: 'Admin Dashboard', status: 'Operational', color: 'text-emerald-400' },
               { label: 'Telegram Bot', status: 'Operational', color: 'text-emerald-400' },
-              { label: 'KYC Processing', status: 'Operational', color: 'text-emerald-400' },
             ].map(({ label, status, color }) => (
               <div key={label} className="flex items-center justify-between">
                 <span className="text-slate-400 text-sm">{label}</span>

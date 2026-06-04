@@ -54,7 +54,7 @@ PayBot is built with a modular, scalable architecture:
 - **PhotonPay**: Specialized Alipay and WeChat Pay collection for international trade.
 
 ### 🏦 Digital Wallet Ecosystem
-- **Instant KYB/KYC**: Guided registration flow via Telegram.
+- **Instant Onboarding**: Guided setup flow via Telegram.
 - **Multi-Currency**: Manage PHP, USD, and USDT (TRC20) in a single interface.
 - **Peer-to-Peer**: Zero-fee instant transfers between platform users.
 - **Auto-Sync**: Real-time balance updates across bot, mobile, and dashboard.

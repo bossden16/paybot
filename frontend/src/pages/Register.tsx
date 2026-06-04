@@ -67,8 +67,6 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [kybId, setKybId] = useState<number | null>(null);
-  const [kycId, setKycId] = useState<string | null>(null);
   const [socialConfig, setSocialConfig] = useState<SocialConfig | null>(null);
 
   useEffect(() => {
@@ -89,7 +87,7 @@ export default function Register() {
       return;
     }
     if (!form.telegram_username.trim()) {
-      setError('Telegram username is required to link your account after approval.');
+      setError('Telegram username is required to link your account.');
       return;
     }
     setSubmitting(true);
@@ -112,8 +110,6 @@ export default function Register() {
         setError(data?.detail ?? 'Registration failed. Please try again.');
       } else {
         setSuccess(true);
-        setKybId(data.kyb_id);
-        setKycId(data.xendit_customer_id ?? null);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error. Please try again.');
@@ -130,27 +126,10 @@ export default function Register() {
             <CheckCircle className="h-8 w-8 text-emerald-600" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Application Submitted!</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Account Created!</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Your KYC registration has been received. An admin will review your application
-              and notify you via Telegram (<span className="text-emerald-600">@{form.telegram_username}</span>) once approved.
+              Your account has been successfully created. You can now log in to the dashboard.
             </p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4 text-left space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Application ID</span>
-              <span className="text-foreground font-mono">#{kybId}</span>
-            </div>
-            {kycId && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">{APP_NAME} KYC ID</span>
-                <span className="text-emerald-600 font-mono text-[10px] truncate max-w-[180px]">{kycId}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Status</span>
-              <span className="text-amber-600 font-semibold">Pending Review</span>
-            </div>
           </div>
           <button
             onClick={() => navigate('/login')}
@@ -180,17 +159,16 @@ export default function Register() {
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-3">Apply for Access</h2>
+          <h2 className="text-2xl font-bold text-white mb-3">Get Started</h2>
           <p className="text-blue-100 text-sm mb-8 leading-relaxed">
-            Submit your KYC information to request admin dashboard access. After approval, you'll be notified via Telegram.
+            Create an account to access the PayBot dashboard and start accepting payments.
           </p>
 
           <div className="space-y-4">
             {[
-              { step: '1', label: 'Submit your information', desc: 'Fill in name, email, phone, and Telegram username' },
-              { step: '2', label: 'KYC verification', desc: `Your identity is verified via the ${APP_NAME} KYC platform` },
-              { step: '3', label: 'Admin review & approval', desc: 'A super admin reviews and approves your application' },
-              { step: '4', label: 'Dashboard access granted', desc: 'Sign in with Telegram once approved' },
+              { step: '1', label: 'Create an account', desc: 'Fill in your details to get started' },
+              { step: '2', label: 'Link Telegram', desc: 'Connect your Telegram account for instant notifications' },
+              { step: '3', label: 'Accept Payments', desc: 'Use our powerful tools to grow your business' },
             ].map((s) => (
               <div key={s.step} className="flex items-start gap-3">
                 <div className="h-6 w-6 rounded-full bg-white/20 border border-white/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -202,11 +180,6 @@ export default function Register() {
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="mt-8 bg-white/15 border border-white/20 rounded-xl p-3">
-            <p className="text-white text-xs font-semibold mb-1">Security Notice</p>
-            <p className="text-blue-100 text-xs">Your Telegram username is required to receive approval notifications and to link your account after approval.</p>
           </div>
         </div>
 
@@ -226,7 +199,7 @@ export default function Register() {
         <div className="w-full max-w-sm">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-foreground mb-1">Create an Account</h2>
-            <p className="text-muted-foreground text-sm">Submit your KYC application for admin access.</p>
+            <p className="text-muted-foreground text-sm">Join PayBot to manage your payments.</p>
           </div>
 
           {error && (
@@ -300,21 +273,6 @@ export default function Register() {
               </div>
             </div>
 
-            {/* Address */}
-            <div>
-              <label className="block text-muted-foreground text-xs font-medium mb-1.5">Address</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                <textarea
-                  value={form.address}
-                  onChange={(e) => handleChange('address', e.target.value)}
-                  placeholder="123 Main St, Makati City, Metro Manila"
-                  rows={2}
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors resize-none"
-                />
-              </div>
-            </div>
-
             {/* Telegram username */}
             <div>
               <label className="block text-muted-foreground text-xs font-medium mb-1.5">Telegram Username <span className="text-red-400">*</span></label>
@@ -329,15 +287,6 @@ export default function Register() {
                   className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors"
                 />
               </div>
-              <p className="text-muted-foreground text-[10px] mt-1.5 ml-1">Required to link and notify your Telegram account after approval.</p>
-            </div>
-
-            {/* KYC badge */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
-              <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
-              <p className="text-muted-foreground text-xs">
-                Your identity will be verified via the <span className="text-blue-600 font-semibold">{APP_NAME} KYC platform</span>.
-              </p>
             </div>
 
             <button
@@ -348,13 +297,25 @@ export default function Register() {
               {submitting ? (
                 <>
                   <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Submitting…
+                  Creating account…
                 </>
               ) : (
-                'Submit KYC Application'
+                'Create Account'
               )}
             </button>
           </form>
+
+          <p className="text-muted-foreground text-xs text-center mt-5">
+            Already have an account?{' '}
+            <Link to="/login" className="text-primary hover:text-primary/80 transition-colors">
+              Sign In
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
           {/* ── Social sign-up options ────────────────────────── */}
           {socialConfig && (socialConfig.telegram_bot_username || socialConfig.whatsapp_number || socialConfig.messenger_page_username) && (

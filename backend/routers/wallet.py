@@ -431,7 +431,6 @@ async def send_money(
 
     # 1. Lookup recipient (mirrors _get_or_promote_recipient in telegram.py)
     from models.admin_users import AdminUser
-    from models.kyb_registrations import KybRegistration
 
     # Try username
     res = await db.execute(select(AdminUser).where(func.lower(AdminUser.telegram_username) == recipient_identifier.lower()))
@@ -441,28 +440,6 @@ async def send_money(
         # Try ID match
         res = await db.execute(select(AdminUser).where(AdminUser.telegram_id == recipient_identifier))
         recipient_admin = res.scalar_one_or_none()
-
-    if not recipient_admin:
-        # Try KYB promotion
-        res = await db.execute(
-            select(KybRegistration).where(
-                (func.lower(KybRegistration.telegram_username) == recipient_identifier.lower()) |
-                (KybRegistration.chat_id == recipient_identifier)
-            )
-        )
-        kyb = res.scalar_one_or_none()
-        if kyb and kyb.status == "approved":
-            recipient_admin = AdminUser(
-                telegram_id=kyb.chat_id,
-                telegram_username=kyb.telegram_username,
-                name=kyb.full_name or kyb.telegram_username or kyb.chat_id,
-                is_active=True,
-                can_manage_payments=True,
-                can_manage_wallet=True,
-                added_by="system_dashboard_send",
-            )
-            db.add(recipient_admin)
-            await db.flush()
 
     if not recipient_admin:
         raise HTTPException(status_code=404, detail=f"Recipient '{data.recipient}' not found in the system.")

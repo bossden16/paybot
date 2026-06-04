@@ -29,8 +29,6 @@ import services.wallet_integration # Initialize wallet event handlers
 # Telegram bot commands registered on startup
 BOT_COMMANDS = [
     {"command": "start", "description": "Welcome message & quick menu"},
-    {"command": "register", "description": "Register to use this bot (KYB)"},
-    {"command": "kyb", "description": "Start KYB registration flow"},
     {"command": "login", "description": "Log in with your PIN"},
     {"command": "setpin", "description": "Set or change your PIN"},
     {"command": "logout", "description": "End your current session"},

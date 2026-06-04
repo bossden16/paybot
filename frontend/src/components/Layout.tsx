@@ -84,9 +84,6 @@ export default function Layout({ children, connected }: LayoutProps) {
       if (['/usdt-send-requests', '/topup-requests', '/bank-deposits'].some((r) => path.startsWith(r))) {
         next.add('requests');
       }
-      if (['/kyb-registrations', '/kyc-verifications'].some((r) => path.startsWith(r))) {
-        next.add('compliance');
-      }
       return next;
     });
   }, [path]);
@@ -163,17 +160,6 @@ export default function Layout({ children, connected }: LayoutProps) {
                 { to: '/usdt-send-requests', icon: Send, label: t('nav_usdt_requests'), badge: 'Super' },
                 { to: '/topup-requests', icon: DollarSign, label: t('nav_topup_requests'), badge: 'Super' },
                 { to: '/bank-deposits', icon: Building2, label: t('nav_bank_deposits'), badge: 'Super' },
-              ],
-            },
-            {
-              type: 'group' as const,
-              key: 'compliance',
-              icon: Settings2,
-              label: t('nav_compliance'),
-              badge: 'Super',
-              children: [
-                { to: '/kyb-registrations', icon: ClipboardList, label: t('nav_kyb_registrations'), badge: 'Super' },
-                { to: '/kyc-verifications', icon: UserCheck, label: t('nav_kyc_verifications'), badge: 'Super' },
               ],
             },
           ] as NavEntry[],
