@@ -30,6 +30,7 @@ import {
   Bitcoin,
   AlertCircle,
   ShieldAlert,
+  Info,
   Link as LinkIcon,
   Zap,
   ArrowRight,
