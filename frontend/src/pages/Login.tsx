@@ -66,7 +66,7 @@ function HeroCard({
 }: { icon: React.ReactNode; name: string; amount: string; statusLabel: string; statusCls: string; delay?: string }) {
     return (
         <div
-            className="glass-effect rounded-2xl p-4 card-shadow-lg hover-scale animate-float logo-pop border border-white/5"
+            className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 shadow-2xl hover-scale animate-float border border-white/10"
             style={{ animationDelay: delay }}
         >
             <div className="flex items-center gap-3 mb-3">
@@ -79,14 +79,14 @@ function HeroCard({
                 </div>
                 <div className="flex-1">
                     <div className="flex items-center justify-between">
-                        <p className="text-[#141414] font-semibold text-sm">{name}</p>
-                        <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-tighter">LIVE_SYNC</span>
+                        <p className="text-white font-semibold text-sm">{name}</p>
+                        <span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">LIVE_SYNC</span>
                     </div>
-                    <p className="text-[#595959] text-xs">Payment Method</p>
+                    <p className="text-white/40 text-xs">Payment Method</p>
                 </div>
             </div>
             <div className="flex items-center justify-between">
-                <span className="text-[#141414] font-bold">{amount}</span>
+                <span className="text-white font-bold">{amount}</span>
                 <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-lg ${statusCls} uppercase tracking-widest`}>{statusLabel}</span>
             </div>
         </div>
@@ -105,10 +105,18 @@ export default function Login() {
     const loginSectionRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // Force dark mode for login page for consistent branding
+        document.documentElement.classList.add('dark');
+
         fetch('/api/v1/auth/telegram-login-config')
             .then(r => r.ok ? r.json() : null)
             .then(d => d?.bot_username && setBotUsername(d.bot_username))
             .catch(() => { });
+
+        return () => {
+            // Optional: cleanup if you want other pages to potentially be light
+            // document.documentElement.classList.remove('dark');
+        };
     }, []);
 
     const scrollToLogin = () => {
@@ -137,28 +145,28 @@ export default function Login() {
     if (user) return <Navigate to="/intro" replace />;
 
     return (
-        <div className="min-h-screen bg-white text-[#0A0F1E] overflow-x-hidden font-sans">
-            <header className="fixed top-0 left-0 right-0 z-[100] bg-white/70 backdrop-blur-xl border-b border-black/[0.03]">
+        <div className="min-h-screen bg-[#0A0F1E] text-white overflow-x-hidden font-sans">
+            <header className="fixed top-0 left-0 right-0 z-[100] bg-[#0A0F1E]/80 backdrop-blur-xl border-b border-white/5">
                 <div className="max-w-7xl mx-auto px-10 h-24 flex items-center justify-between">
-                    <div className="flex items-center gap-5 group cursor-pointer">
-                        <div className="h-12 w-12 rounded-2xl bg-[#0A0F1E] flex items-center justify-center shadow-2xl shadow-brand-blue-500/20 group-hover:rotate-3 group-hover:scale-110 transition-all duration-500 border border-white/5">
-                            <img src="/logo.svg" alt="Logo" className="h-7 w-7 animate-logo-bounce" />
+                    <div className="flex items-center gap-5 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                        <div className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center shadow-2xl shadow-brandblue-500/40 group-hover:rotate-3 group-hover:scale-110 transition-all duration-500">
+                            <img src="/logo.svg" alt="Logo" className="h-7 w-7" />
                         </div>
                         <div className="hidden sm:block">
-                            <h2 className="text-2xl font-black text-foreground tracking-tighter uppercase leading-none">{APP_NAME}</h2>
-                            <p className="text-[10px] font-black text-brandblue-500 uppercase tracking-[0.4em] mt-1.5 leading-none">Philippines</p>
+                            <h2 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">{APP_NAME}</h2>
+                            <p className="text-[10px] font-black text-brandblue-400 uppercase tracking-[0.4em] mt-1.5 leading-none">Philippines</p>
                         </div>
                     </div>
 
                     <div className="hidden md:flex items-center gap-12">
-                        <Link to="/features" className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.3em] hover:text-brand-blue-600 transition-colors">CAPABILITIES</Link>
-                        <Link to="/pricing" className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.3em] hover:text-brand-blue-600 transition-colors">PRICING</Link>
-                        <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.3em] hover:text-brand-blue-600 transition-colors">KERNEL_SUPPORT</a>
-                        <div className="h-4 w-px bg-black/[0.08] mx-4" />
-                        <button onClick={scrollToLogin} className="bg-[#0A0F1E] hover:bg-black text-white font-black text-[11px] uppercase tracking-[0.3em] px-10 h-14 rounded-2xl shadow-2xl active:scale-95 transition-all">SIGN_IN</button>
+                        <Link to="/features" className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em] hover:text-brandblue-400 transition-colors">CAPABILITIES</Link>
+                        <Link to="/pricing" className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em] hover:text-brandblue-400 transition-colors">PRICING</Link>
+                        <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em] hover:text-brandblue-400 transition-colors">KERNEL_SUPPORT</a>
+                        <div className="h-4 w-px bg-white/10 mx-4" />
+                        <button onClick={scrollToLogin} className="bg-white text-[#0A0F1E] font-black text-[11px] uppercase tracking-[0.3em] px-10 h-14 rounded-2xl shadow-2xl active:scale-95 transition-all hover:bg-brandblue-50">SIGN_IN</button>
                     </div>
 
-                    <button className="md:hidden h-12 w-12 flex items-center justify-center rounded-2xl bg-muted/50 text-foreground" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
+                    <button className="md:hidden h-12 w-12 flex items-center justify-center rounded-2xl bg-white/5 text-white" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
                         {mobileNavOpen ? <X size={24} /> : <Menu size={24} />}
                     </button>
                 </div>
