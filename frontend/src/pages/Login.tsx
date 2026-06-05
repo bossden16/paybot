@@ -361,19 +361,6 @@ export default function Login() {
                 </div>
             </section>
 
-                    <div className="mt-12 text-center space-y-8 opacity-40 hover:opacity-100 transition-opacity duration-700">
-                        <p className="text-muted-foreground/60 text-[10px] font-black uppercase tracking-[0.4em]">Network_Support_Channels</p>
-                        <div className="flex justify-center gap-8">
-                            {SUPPORT_LINKS.map(link => (
-                                <a key={link.handle} href={link.href} className="text-xs font-black text-foreground hover:text-brandblue-600 transition-colors uppercase tracking-widest border-b-2 border-transparent hover:border-brandblue-500/20 pb-1">
-                                    {link.handle}
-                                </a>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <AppFooter />
         </div>
     );
