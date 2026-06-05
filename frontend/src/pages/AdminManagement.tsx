@@ -173,11 +173,11 @@ export default function AdminManagement() {
                <div className="h-14 w-14 rounded-2xl bg-brandblue-500/10 flex items-center justify-center border border-brandblue-500/20 shadow-inner">
                  <ShieldCheck className="h-8 w-8 text-brandblue-600" />
                </div>
-               Security Kernel
+               Access Management
             </h1>
             <p className="text-muted-foreground font-medium flex items-center gap-3">
                <span className="flex h-2 w-2 rounded-full bg-brand-blue-500 shadow-[0_0_10px_rgba(0,122,255,0.8)]" />
-               <span className="uppercase tracking-[0.2em] text-[10px] font-black">Identity & Access Management (IAM)</span>
+               <span className="uppercase tracking-[0.2em] text-[10px] font-black">Manage administrators and system permissions</span>
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -191,7 +191,7 @@ export default function AdminManagement() {
                 }`}
               >
                 {showAdd ? <X className="h-5 w-5 mr-3" /> : <Plus className="h-5 w-5 mr-3" />}
-                {showAdd ? 'ABORT_OPERATION' : 'REGISTER_NODE_ADMIN'}
+                {showAdd ? 'CANCEL' : 'ADD NEW ADMIN'}
               </Button>
             )}
           </div>
@@ -200,10 +200,10 @@ export default function AdminManagement() {
         <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-10">
            <TabsList className="bg-[#0A0F1E] border border-white/5 p-1.5 h-auto flex-wrap sm:inline-flex gap-2 rounded-[1.5rem] shadow-2xl">
              {[
-               { id: 'admins', icon: ShieldCheck, label: 'Kernel_Admins', color: 'text-brandblue-500' },
-               { id: 'users', icon: Users, label: 'Cloud_Users', color: 'text-cyan-500' },
-               { id: 'keys', icon: Key, label: 'Access_Vault', color: 'text-amber-500', super: true },
-               { id: 'wallets', icon: Database, label: 'Ledger_Audits', color: 'text-emerald-500', super: true },
+               { id: 'admins', icon: ShieldCheck, label: 'Admins', color: 'text-brandblue-500' },
+               { id: 'users', icon: Users, label: 'User Directory', color: 'text-cyan-500' },
+               { id: 'keys', icon: Key, label: 'API Keys', color: 'text-amber-500', super: true },
+               { id: 'wallets', icon: Database, label: 'Ledger Audit', color: 'text-emerald-500', super: true },
              ].map(t => (!t.super || isSuperAdmin) && (
                <TabsTrigger key={t.id} value={t.id} className="rounded-xl py-3.5 px-8 data-[state=active]:bg-white/10 data-[state=active]:text-white font-black text-[11px] uppercase tracking-[0.3em] transition-all text-white/30 border border-transparent data-[state=active]:border-white/10">
                  <t.icon className={`h-4 w-4 mr-3 ${t.color}`} /> {t.label}
@@ -218,30 +218,30 @@ export default function AdminManagement() {
                    <CardHeader className="p-10 border-b border-border/10">
                      <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-4">
                        <UserPlus className="h-7 w-7 text-brand-blue-600" />
-                       Administrative Onboarding
+                       New Admin Registration
                      </CardTitle>
-                     <CardDescription className="font-black text-[10px] uppercase tracking-widest text-muted-foreground/40 mt-2">Initialize new node supervisor credentials</CardDescription>
+                     <CardDescription className="font-black text-[10px] uppercase tracking-widest text-muted-foreground/40 mt-2">Configure permissions for a new system administrator</CardDescription>
                    </CardHeader>
                    <CardContent className="p-10 space-y-10">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                          <div className="space-y-4">
-                           <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 ml-1">Telegram Identifier</Label>
-                           <Input placeholder="UID_64BIT" value={form.telegram_id} onChange={e => setForm(f => ({...f, telegram_id: e.target.value}))} className="h-16 bg-muted/20 border-border/40 font-mono font-black rounded-2xl px-6 border-2 shadow-inner" />
+                           <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 ml-1">Telegram ID</Label>
+                           <Input placeholder="123456789" value={form.telegram_id} onChange={e => setForm(f => ({...f, telegram_id: e.target.value}))} className="h-16 bg-muted/20 border-border/40 font-mono font-black rounded-2xl px-6 border-2 shadow-inner" />
                          </div>
                          <div className="space-y-4">
-                           <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 ml-1">Username Hub</Label>
-                           <Input placeholder="@HANDLE" value={form.telegram_username} onChange={e => setForm(f => ({...f, telegram_username: e.target.value}))} className="h-16 bg-muted/20 border-border/40 font-black rounded-2xl px-6 uppercase border-2 shadow-inner" />
+                           <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 ml-1">Telegram Username</Label>
+                           <Input placeholder="@username" value={form.telegram_username} onChange={e => setForm(f => ({...f, telegram_username: e.target.value}))} className="h-16 bg-muted/20 border-border/40 font-black rounded-2xl px-6 uppercase border-2 shadow-inner" />
                          </div>
                          <div className="space-y-4">
-                           <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 ml-1">Full Legal Alias</Label>
-                           <Input placeholder="ENTITY_NAME" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="h-16 bg-muted/20 border-border/40 font-black rounded-2xl px-6 uppercase border-2 shadow-inner" />
+                           <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/60 ml-1">Display Name</Label>
+                           <Input placeholder="Full Name" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="h-16 bg-muted/20 border-border/40 font-black rounded-2xl px-6 uppercase border-2 shadow-inner" />
                          </div>
                       </div>
                       <div className="space-y-6">
-                         <p className="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/60 ml-1">Privilege Allocation Protocol</p>
+                         <p className="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/60 ml-1">Permission Set</p>
                          <div className="flex flex-wrap gap-3">
                             <button onClick={() => setForm(f => ({...f, is_super_admin: !f.is_super_admin}))} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all duration-500 flex items-center gap-3 ${form.is_super_admin ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-muted/10 border-border/40 text-muted-foreground/60 hover:bg-muted/20'}`}>
-                              <Crown className="h-4 w-4" /> SUPER_USER
+                              <Crown className="h-4 w-4" /> SUPER ADMIN
                             </button>
                             {PERMISSION_KEYS.map(p => (
                               <button key={p.key} onClick={() => setForm(f => ({...f, [p.key]: !f[p.key as any]}))} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all duration-500 ${form[p.key as any] ? 'bg-brandblue-600 border-brandblue-600 text-white shadow-lg shadow-brandblue-500/20' : 'bg-muted/10 border-border/40 text-muted-foreground/60 hover:bg-muted/20'}`}>
@@ -251,7 +251,7 @@ export default function AdminManagement() {
                          </div>
                       </div>
                       <Button onClick={handleAdd} disabled={saving} className="w-full h-20 bg-brandblue-600 hover:bg-brandblue-700 text-white font-black rounded-[2rem] uppercase tracking-[0.4em] shadow-2xl shadow-brandblue-500/30 active:scale-95 transition-all text-sm group">
-                        {saving ? <Loader2 className="h-7 w-7 animate-spin mr-3" /> : <><ShieldCheck className="h-7 w-7 mr-4 group-hover:scale-110 transition-transform" /> AUTHORIZE_NODE_LEVEL_ACCESS</>}
+                        {saving ? <Loader2 className="h-7 w-7 animate-spin mr-3" /> : <><ShieldCheck className="h-7 w-7 mr-4 group-hover:scale-110 transition-transform" /> PROVISION ADMIN ACCESS</>}
                       </Button>
                    </CardContent>
                 </Card>
@@ -260,18 +260,18 @@ export default function AdminManagement() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {Array.isArray(admins) && admins.map(admin => (
                   <Card key={admin.id} className={`fintech-card border-0 shadow-2xl overflow-hidden bg-card transition-all duration-700 relative group ${!admin.is_active && 'opacity-50 grayscale scale-[0.98]'}`}>
-                    {admin.is_super_admin && <div className="absolute top-0 right-0 px-6 py-1.5 bg-amber-400 text-amber-950 font-black text-[9px] uppercase tracking-[0.3em] rounded-bl-[1.5rem] shadow-xl z-20">SYSTEM_ROOT</div>}
+                    {admin.is_super_admin && <div className="absolute top-0 right-0 px-6 py-1.5 bg-amber-400 text-amber-950 font-black text-[9px] uppercase tracking-[0.3em] rounded-bl-[1.5rem] shadow-xl z-20">SUPER ADMIN</div>}
                     <CardContent className="p-10">
                       <div className="flex items-center gap-6 mb-10">
                         <div className={`h-20 w-20 rounded-[1.5rem] flex items-center justify-center border-2 shadow-2xl transition-all duration-700 group-hover:scale-110 group-hover:rotate-3 ${admin.is_super_admin ? 'bg-amber-500/10 border-amber-400/30 text-amber-500' : 'bg-brandblue-500/10 border-brandblue-500/20 text-brandblue-600'}`}>
                            {admin.is_super_admin ? <Crown className="h-10 w-10 animate-float" /> : <ShieldCheck className="h-10 w-10" />}
                         </div>
                         <div className="min-w-0 flex-1 space-y-1">
-                          <p className="text-lg font-black text-foreground uppercase tracking-tight truncate group-hover:text-brandblue-600 transition-colors">{admin.name || 'ANONYMOUS_KERNEL'}</p>
-                          <p className="text-[11px] font-black text-muted-foreground/40 tracking-[0.2em] uppercase">ID: {admin.telegram_id}</p>
+                          <p className="text-lg font-black text-foreground uppercase tracking-tight truncate group-hover:text-brandblue-600 transition-colors">{admin.name || 'Anonymous User'}</p>
+                          <p className="text-[11px] font-black text-muted-foreground/40 tracking-[0.2em] uppercase">Telegram ID: {admin.telegram_id}</p>
                           <div className="flex items-center gap-2 pt-1">
                              <div className="h-1 w-1 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">@{admin.telegram_username || 'NO_ALIAS'}</p>
+                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">@{admin.telegram_username || 'No Handle'}</p>
                           </div>
                         </div>
                         <div className="flex flex-col gap-3">
@@ -282,7 +282,7 @@ export default function AdminManagement() {
                       </div>
 
                       <div className="space-y-6 pt-10 border-t border-border/10">
-                         <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.4em] ml-1">Assigned Permissions</p>
+                         <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.4em] ml-1">Active Access Rights</p>
                          <div className="flex flex-wrap gap-2">
                             {Array.isArray(PERMISSION_KEYS) && PERMISSION_KEYS.map(p => {
                               const has = admin[p.key as keyof AdminUser] as boolean;
@@ -308,8 +308,8 @@ export default function AdminManagement() {
            <TabsContent value="users" className="mt-0 animate-in fade-in slide-in-from-top-4 duration-500">
               <Card className="fintech-card border-0 shadow-2xl overflow-hidden bg-card/60">
                 <CardHeader className="p-10 border-b border-border/10 bg-[#0A0F1E]">
-                  <CardTitle className="text-xl font-black uppercase tracking-tight text-white/80">Cloud Infrastructure Registrations</CardTitle>
-                  <CardDescription className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Merchant accounts with verified dashboard access</CardDescription>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight text-white/80">User Directory</CardTitle>
+                  <CardDescription className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Merchant accounts and verified platform users</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 bg-card">
                    <div className="flex flex-col items-center justify-center py-48 text-center space-y-8 px-10">
@@ -317,8 +317,8 @@ export default function AdminManagement() {
                          <Users className="h-12 w-12" />
                       </div>
                       <div className="space-y-2">
-                         <h3 className="text-2xl font-black text-foreground/40 uppercase tracking-tighter">Zero Record set</h3>
-                         <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.4em]">No external merchant identity detected on this node</p>
+                         <h3 className="text-2xl font-black text-foreground/40 uppercase tracking-tighter">No Users Found</h3>
+                         <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.4em]">The user database is currently empty</p>
                       </div>
                    </div>
                 </CardContent>
@@ -328,8 +328,8 @@ export default function AdminManagement() {
            <TabsContent value="keys" className="mt-0 animate-in fade-in slide-in-from-top-4 duration-500">
               <Card className="fintech-card border-0 shadow-2xl overflow-hidden bg-card/60">
                 <CardHeader className="p-10 border-b border-border/10 bg-[#0A0F1E]">
-                  <CardTitle className="text-xl font-black uppercase tracking-tight text-white/80">API Vault & Access Keys</CardTitle>
-                  <CardDescription className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Encrypted credential storage for external gateway nodes</CardDescription>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight text-white/80">API & Security Credentials</CardTitle>
+                  <CardDescription className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Manage secure keys for third-party integrations</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 bg-card">
                    <div className="flex flex-col items-center justify-center py-48 text-center space-y-8 px-10">
@@ -337,8 +337,8 @@ export default function AdminManagement() {
                          <Key className="h-12 w-12" />
                       </div>
                       <div className="space-y-2">
-                         <h3 className="text-2xl font-black text-foreground/40 uppercase tracking-tighter">Vault Locked</h3>
-                         <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.4em]">No external API credentials configured in the secure storage</p>
+                         <h3 className="text-2xl font-black text-foreground/40 uppercase tracking-tighter">Vault Empty</h3>
+                         <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.4em]">No API credentials have been provisioned yet</p>
                       </div>
                    </div>
                 </CardContent>
@@ -348,8 +348,8 @@ export default function AdminManagement() {
            <TabsContent value="wallets" className="mt-0 animate-in fade-in slide-in-from-top-4 duration-500">
               <Card className="fintech-card border-0 shadow-2xl overflow-hidden bg-card/60">
                 <CardHeader className="p-10 border-b border-border/10 bg-[#0A0F1E]">
-                  <CardTitle className="text-xl font-black uppercase tracking-tight text-white/80">System-Wide Ledger Audit</CardTitle>
-                  <CardDescription className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Global liquidity overview across all merchant nodes</CardDescription>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight text-white/80">Global Liquidity Audit</CardTitle>
+                  <CardDescription className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Real-time overview of all wallet balances across the network</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 bg-card">
                    <div className="flex flex-col items-center justify-center py-48 text-center space-y-8 px-10">
@@ -357,8 +357,8 @@ export default function AdminManagement() {
                          <Database className="h-12 w-12" />
                       </div>
                       <div className="space-y-2">
-                         <h3 className="text-2xl font-black text-foreground/40 uppercase tracking-tighter">Zero Balance Detected</h3>
-                         <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.4em]">No active ledger entries found in the audit trail</p>
+                         <h3 className="text-2xl font-black text-foreground/40 uppercase tracking-tighter">No Ledger Data</h3>
+                         <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.4em]">The system has no recorded wallet balances to display</p>
                       </div>
                    </div>
                 </CardContent>
