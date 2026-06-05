@@ -361,6 +361,8 @@ class WalletsService:
         wallet.balance = round(max(0.0, balance_before + amount), 2)
         wallet.updated_at = now
 
+        balance_after = wallet.balance
+
         txn = Wallet_transactions(
             user_id=target_user_id,
             wallet_id=wallet.id,
@@ -374,9 +376,6 @@ class WalletsService:
             created_at=now,
         )
         self.db.add(txn)
-
-        wallet.balance = balance_after
-        wallet.updated_at = now
 
         await self.db.commit()
         await self.db.refresh(txn)

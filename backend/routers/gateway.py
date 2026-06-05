@@ -22,6 +22,7 @@ from services.paymongo_service import PayMongoService
 from services.otp_service import OTPService
 from services.event_bus import payment_event_bus
 from services.transactions import TransactionsService
+from services.pos_terminal import POSTerminalService
 
 logger = logging.getLogger(__name__)
 
@@ -77,31 +78,71 @@ class CreateCardTerminalRequest(BaseModel):
 
 
 async def _refresh_maya_transaction(db: AsyncSession, checkout_id: str) -> dict:
+    # 1. Check in regular Transactions table
     txn_service = TransactionsService(db)
     txn = await txn_service.find_by_external_or_gateway_id(checkout_id)
-    if not txn:
-        return {"success": False, "message": "Transaction not found"}
 
-    if txn.status == "paid":
-        return {"success": True, "message": "Transaction is already paid", "status": txn.status, "transaction_id": txn.id}
+    if txn:
+        if txn.status == "paid":
+            return {"success": True, "message": "Transaction is already paid", "status": txn.status, "transaction_id": txn.id}
 
-    service = MayaService()
-    status_result = await service.get_checkout_status(checkout_id)
-    if not status_result.get("success"):
-        return status_result
+        service = MayaService()
+        status_result = await service.get_checkout_status(checkout_id)
+        if not status_result.get("success"):
+            return status_result
 
-    status = status_result.get("status", "").upper()
-    if status in ("PAID", "COMPLETED", "SETTLED", "SUCCESS", "AUTHORIZED"):
-        await txn_service.mark_as_paid(txn, "Maya")
-        return {"success": True, "message": "Transaction marked paid and wallet credited", "status": txn.status, "transaction_id": txn.id}
+        status = status_result.get("status", "").upper()
+        if status in ("PAID", "COMPLETED", "SETTLED", "SUCCESS", "AUTHORIZED"):
+            await txn_service.mark_as_paid(txn, "Maya")
+            return {"success": True, "message": "Transaction marked paid and wallet credited", "status": txn.status, "transaction_id": txn.id}
 
-    if status in ("FAILED", "CANCELLED", "DECLINED", "EXPIRED"):
-        txn.status = "failed" if status in ("FAILED", "DECLINED") else status.lower()
-        txn.updated_at = datetime.now(timezone.utc)
-        await db.commit()
+        if status in ("FAILED", "CANCELLED", "DECLINED", "EXPIRED"):
+            txn.status = "failed" if status in ("FAILED", "DECLINED") else status.lower()
+            txn.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            return {"success": False, "message": f"Transaction status is {status}"}
+
         return {"success": False, "message": f"Transaction status is {status}"}
 
-    return {"success": False, "message": f"Transaction status is {status}"}
+    # 2. Check in POS Terminal Transactions table
+    pos_service = POSTerminalService(db)
+    # Search by order_id or gateway reference
+    from models.pos_terminal import POSTerminalTransaction
+    res = await db.execute(
+        select(POSTerminalTransaction).where(
+            or_(
+                POSTerminalTransaction.order_id == checkout_id,
+                POSTerminalTransaction.maya_checkout_id == checkout_id
+            )
+        )
+    )
+    pos_txn = res.scalar_one_or_none()
+
+    if pos_txn:
+        if pos_txn.status == "completed":
+            return {"success": True, "message": "POS Transaction already completed", "status": "paid", "transaction_id": pos_txn.id}
+
+        service = MayaService()
+        status_result = await service.get_checkout_status(checkout_id)
+        if not status_result.get("success"):
+            return status_result
+
+        status = status_result.get("status", "").upper()
+        if status in ("PAID", "COMPLETED", "SETTLED", "SUCCESS", "AUTHORIZED"):
+            await pos_service.update_transaction_status(pos_txn.order_id, "completed")
+            return {"success": True, "message": "POS Transaction completed and wallet credited", "status": "paid", "transaction_id": pos_txn.id}
+
+        if status in ("FAILED", "CANCELLED", "DECLINED", "EXPIRED"):
+            await pos_service.update_transaction_status(
+                pos_txn.order_id,
+                "failed" if status in ("FAILED", "DECLINED") else status.lower(),
+                failure_reason=f"Maya status: {status}"
+            )
+            return {"success": False, "message": f"POS Transaction status is {status}"}
+
+        return {"success": False, "message": f"POS Transaction status is {status}"}
+
+    return {"success": False, "message": "Transaction not found in any system"}
 
 
 class CreateDisbursementRequest(BaseModel):

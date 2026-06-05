@@ -50,8 +50,11 @@ export const TransactionsScreen = () => {
   });
 
   const filteredData = data?.items?.filter(item => {
-    const isIncome = ['terminal_sale', 'top_up', 'credit'].includes(item.transaction_type) || (item.amount > 0 && item.transaction_type === 'adjustment');
-    const isExpense = ['withdraw', 'disbursement', 'debit'].includes(item.transaction_type) || (item.amount < 0 && item.transaction_type === 'adjustment');
+    const incomeTypes = ['terminal_sale', 'top_up', 'credit', 'receive', 'usd_receive', 'admin_credit'];
+    const expenseTypes = ['withdraw', 'disbursement', 'debit', 'send', 'usd_send', 'admin_debit', 'usdt_send'];
+
+    const isIncome = incomeTypes.includes(item.transaction_type) || (item.amount > 0 && item.transaction_type === 'adjustment');
+    const isExpense = expenseTypes.includes(item.transaction_type) || (item.amount < 0 && item.transaction_type === 'adjustment');
 
     if (filter === 'all') return true;
     if (filter === 'income') return isIncome;
@@ -60,7 +63,8 @@ export const TransactionsScreen = () => {
   }) || [];
 
   const renderItem = ({ item, index }: { item: any, index: number }) => {
-    const isNegative = ['withdraw', 'disbursement', 'debit'].includes(item.transaction_type) || (item.amount < 0 && item.transaction_type === 'adjustment');
+    const expenseTypes = ['withdraw', 'disbursement', 'debit', 'send', 'usd_send', 'admin_debit', 'usdt_send'];
+    const isNegative = expenseTypes.includes(item.transaction_type) || (item.amount < 0 && item.transaction_type === 'adjustment');
 
     return (
       <TouchableOpacity

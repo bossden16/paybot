@@ -526,11 +526,36 @@ class POSTerminalService:
     async def get_transaction_by_order_id(
         self, order_id: str
     ) -> Optional[POSTerminalTransaction]:
-        """Get a transaction by order ID."""
+        """Get a transaction by order ID and sync with gateway if pending."""
         result = await self.db.execute(
             select(POSTerminalTransaction).where(POSTerminalTransaction.order_id == order_id)
         )
-        return result.scalar_one_or_none()
+        transaction = result.scalar_one_or_none()
+
+        if transaction and transaction.status == "pending":
+            # Attempt to sync with gateway
+            try:
+                if transaction.payment_method == "maya" and transaction.maya_checkout_id:
+                    status_res = await self.maya_service.get_checkout_status(transaction.maya_checkout_id)
+                    if status_res.get("success"):
+                        status = status_res.get("status", "").upper()
+                        if status in ("PAID", "COMPLETED", "SETTLED", "SUCCESS", "AUTHORIZED"):
+                            await self.update_transaction_status(order_id, "completed")
+                            await self.db.refresh(transaction)
+                        elif status in ("FAILED", "CANCELLED", "DECLINED", "EXPIRED"):
+                            await self.update_transaction_status(
+                                order_id,
+                                "failed" if status in ("FAILED", "DECLINED") else status.lower(),
+                                failure_reason=f"Maya status: {status}"
+                            )
+                            await self.db.refresh(transaction)
+                elif transaction.payment_method in ["gcash", "grabpay"] and transaction.paymongo_checkout_id:
+                    # Sync with PayMongo if needed
+                    pass
+            except Exception as e:
+                logger.warning(f"Failed to sync terminal transaction {order_id}: {e}")
+
+        return transaction
 
     async def list_terminal_transactions(
         self, terminal_id: int, page: int = 1, per_page: int = 10
