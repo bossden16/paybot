@@ -318,8 +318,24 @@ export default function PaymentsHub() {
                     {description && <p className="text-xs text-white/40 mt-6 font-black uppercase tracking-widest italic leading-relaxed">"{description}"</p>}
 
                     <div className="mt-10 pt-10 border-t border-white/5 space-y-8 text-left">
-                      {Object.entries(result).map(([key, value]) => {
-                        if (!value || key === 'success' || key === 'message') return null;
+                      {/* QR Code Display if available in result */}
+                      {(() => {
+                        const qr = (result.qr_string || (result.data as any)?.qr_string) as string | undefined;
+                        if (!qr) return null;
+                        return (
+                          <div className="flex flex-col items-center justify-center p-8 bg-white rounded-[2rem] mb-4 shadow-inner">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qr)}`}
+                              alt="Payment QR"
+                              className="w-48 h-48"
+                            />
+                            <p className="mt-4 text-[10px] font-black text-black/30 uppercase tracking-[0.3em] text-center">Scan with any QRPH application</p>
+                          </div>
+                        );
+                      })()}
+
+                      {Object.entries(result.data && typeof result.data === 'object' ? { ...result, ...(result.data as object) } : result).map(([key, value]) => {
+                        if (!value || key === 'success' || key === 'message' || key === 'data') return null;
                         const isUrl = typeof value === 'string' && (value.startsWith('http') || value.startsWith('https'));
 
                         return (
@@ -352,16 +368,19 @@ export default function PaymentsHub() {
                   </div>
 
                   <div className="flex flex-col gap-5">
-                    <Button
-                      className="bg-brandblue-600 hover:bg-brandblue-700 text-white font-black h-20 rounded-[1.5rem] group shadow-2xl shadow-brandblue-500/20 active:scale-95 transition-all text-sm tracking-[0.2em]"
-                      onClick={() => {
-                        const url = result.invoice_url || result.payment_link_url || result.checkout_url || result.payment_url;
-                        if (url) window.open(url as string, '_blank');
-                      }}
-                    >
-                      <span>INITIATE GATEWAY ACCESS</span>
-                      <ChevronRight className="ml-3 h-6 w-6 group-hover:translate-x-1.5 transition-transform" />
-                    </Button>
+                    {(() => {
+                      const url = (result.invoice_url || result.payment_link_url || result.checkout_url || result.payment_url || (result.data as any)?.checkout_url) as string | undefined;
+                      if (!url) return null;
+                      return (
+                        <Button
+                          className="bg-brandblue-600 hover:bg-brandblue-700 text-white font-black h-20 rounded-[1.5rem] group shadow-2xl shadow-brandblue-500/20 active:scale-95 transition-all text-sm tracking-[0.2em]"
+                          onClick={() => window.open(url, '_blank')}
+                        >
+                          <span>INITIATE GATEWAY ACCESS</span>
+                          <ChevronRight className="ml-3 h-6 w-6 group-hover:translate-x-1.5 transition-transform" />
+                        </Button>
+                      );
+                    })()}
                     <Button
                       variant="ghost"
                       className="text-white/40 hover:text-white hover:bg-white/5 font-black h-16 rounded-[1.5rem] text-[11px] uppercase tracking-[0.4em] transition-all border border-white/5"

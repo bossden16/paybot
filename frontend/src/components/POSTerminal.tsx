@@ -49,7 +49,7 @@ interface Transaction {
 const api = {
   getTerminals: async () => {
     const response = await fetch('/api/v1/pos-terminals/', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error('Failed to fetch terminals');
     return response.json();
@@ -57,7 +57,7 @@ const api = {
 
   getTransactions: async (terminalId: number) => {
     const response = await fetch(`/api/v1/pos-terminals/${terminalId}/transactions`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error('Failed to fetch transactions');
     return response.json();
@@ -68,7 +68,7 @@ const api = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
       body: JSON.stringify(data),
     });

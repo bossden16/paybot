@@ -187,9 +187,9 @@ export default function CreatePayment() {
             } else {
                 toast.error(res.data?.message || 'Upstream connection error');
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Node generation error:', err);
-            const errorMsg = err.data?.detail || err.message || 'Node generation failed. Check API configuration.';
+            const errorMsg = (err as any)?.data?.detail || (err as any)?.message || 'Node generation failed. Check API configuration.';
             toast.error(errorMsg);
         } finally {
             setLoading(false);
@@ -421,8 +421,24 @@ export default function CreatePayment() {
                                         </div>
 
                                         <div className="space-y-8">
-                                            {Object.entries(result).map(([key, value]) => {
-                                                if (!value || key === 'success' || key === 'message') return null;
+                                            {/* QR Code Display if available in result */}
+                                            {(() => {
+                                                const qr = (result.qr_string || (result.data as any)?.qr_string) as string | undefined;
+                                                if (!qr) return null;
+                                                return (
+                                                    <div className="flex flex-col items-center justify-center p-8 bg-white rounded-[2rem] mb-8 shadow-2xl">
+                                                        <img
+                                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qr)}`}
+                                                            alt="Payment QR"
+                                                            className="w-48 h-48"
+                                                        />
+                                                        <p className="mt-4 text-[10px] font-black text-black/30 uppercase tracking-[0.3em]">Scan with any QRPH application</p>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {Object.entries(result.data && typeof result.data === 'object' ? { ...result, ...(result.data as object) } : result).map(([key, value]) => {
+                                                if (!value || key === 'success' || key === 'message' || key === 'data') return null;
                                                 return (
                                                     <ResultField
                                                         key={key}
@@ -437,13 +453,19 @@ export default function CreatePayment() {
 
                                     {/* Link Actions */}
                                     <div className="flex flex-col gap-5">
-                                        <Button
-                                            className="h-20 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-[1.5rem] shadow-2xl shadow-emerald-500/20 transition-all active:scale-95 text-sm uppercase tracking-[0.3em] group"
-                                            onClick={() => result.invoice_url && window.open(result.invoice_url as string, '_blank')}
-                                        >
-                                            Inaugurate Checkout Flow
-                                            <ChevronRight className="ml-3 h-6 w-6 group-hover:translate-x-1.5 transition-transform" />
-                                        </Button>
+                                        {(() => {
+                                            const url = (result.invoice_url || result.checkout_url || result.url || (result.data as any)?.checkout_url) as string | undefined;
+                                            if (!url) return null;
+                                            return (
+                                                <Button
+                                                    className="h-20 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-[1.5rem] shadow-2xl shadow-emerald-500/20 transition-all active:scale-95 text-sm uppercase tracking-[0.3em] group"
+                                                    onClick={() => window.open(url, '_blank')}
+                                                >
+                                                    Inaugurate Checkout Flow
+                                                    <ChevronRight className="ml-3 h-6 w-6 group-hover:translate-x-1.5 transition-transform" />
+                                                </Button>
+                                            );
+                                        })()}
                                         <Button
                                             variant="ghost"
                                             className="text-white/40 hover:text-white hover:bg-white/5 font-black h-16 rounded-[1.5rem] text-[11px] uppercase tracking-[0.4em] transition-all border border-white/5"

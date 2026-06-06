@@ -37,7 +37,7 @@ interface Terminal {
 const api = {
   getPendingRequests: async () => {
     const response = await fetch('/api/v1/pos-terminals/requests/pending', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error('Failed to fetch requests');
     return response.json();
@@ -46,7 +46,7 @@ const api = {
   approveRequest: async (requestId: number) => {
     const response = await fetch(`/api/v1/pos-terminals/requests/${requestId}/approve`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error('Failed to approve request');
     return response.json();
@@ -57,7 +57,7 @@ const api = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
       body: JSON.stringify({ reason }),
     });
@@ -67,7 +67,7 @@ const api = {
 
   getAllTerminals: async () => {
     const response = await fetch('/api/v1/pos-terminals/all', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error('Failed to fetch terminals');
     return response.json();
@@ -76,7 +76,7 @@ const api = {
   deactivateTerminal: async (terminalId: number) => {
     const response = await fetch(`/api/v1/pos-terminals/${terminalId}/deactivate`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error('Failed to deactivate terminal');
     return response.json();
