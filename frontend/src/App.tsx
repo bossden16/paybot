@@ -55,17 +55,30 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   useEffect(() => {
-    fetch('/api/v1/app-settings/maintenance')
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn('Maintenance check timed out');
+      setChecked(true);
+    }, 3000);
+
+    fetch('/api/v1/app-settings/maintenance', { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
         setMaintenanceMode(!!data.maintenance_mode);
       })
       .catch((err) => {
-        // If the check fails, don't block access — log for debugging
         console.warn('Maintenance mode check failed:', err);
         setMaintenanceMode(false);
       })
-      .finally(() => setChecked(true));
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setChecked(true);
+      });
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
   }, [location.pathname]);
 
   if (!checked) return null;

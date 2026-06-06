@@ -28,6 +28,7 @@ import {
   Crown,
   ArrowRight,
   Zap,
+  Shield,
   ShieldCheck,
   RefreshCw,
   Activity,
@@ -246,7 +247,7 @@ export default function Dashboard() {
       if (results[6]?.status === 'fulfilled') {
         const res = results[6] as PromiseFulfilledResult<any>;
         const rateData = res.value?.data;
-        if (rateData?.usdt_php_rate) setExchangeRate(rateData.usdt_php_rate);
+        if (rateData?.usdt_php_rate) setExchangeRate(Number(rateData.usdt_php_rate));
       }
 
       if (isSuperAdmin && results[7]?.status === 'fulfilled') {
@@ -327,7 +328,7 @@ export default function Dashboard() {
 
                 <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                   <div className="fintech-badge bg-white/5 text-white border-white/10 backdrop-blur-md text-[9px] sm:text-xs">
-                    {isSuperAdmin ? <Crown className="h-3 w-3 mr-1 sm:mr-2 inline text-amber-400" /> : <ShieldCheck className="h-3 w-3 mr-1 sm:mr-2 inline text-brandblue-400" />}
+                    {isSuperAdmin ? <Crown className="h-3 w-3 mr-1 sm:mr-2 inline text-amber-400" /> : <Shield className="h-3 w-3 mr-1 sm:mr-2 inline text-brandblue-400" />}
                     {isSuperAdmin ? 'Full Access' : 'Operator'}
                   </div>
                   <div className="fintech-badge bg-emerald-500/10 text-emerald-400 border-emerald-500/20 backdrop-blur-md text-[9px] sm:text-xs">
@@ -516,10 +517,7 @@ export default function Dashboard() {
                          <Bot className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                         <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-black uppercase text-white tracking-tight">PayBot AI</p>
-                            <ShieldCheck className="h-3.5 w-3.5 text-brandblue-400 fill-brandblue-400/10" />
-                         </div>
+                         <p className="text-sm font-black uppercase text-white tracking-tight">PayBot AI</p>
                          <div className="flex items-center gap-2">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             <p className="text-[9px] font-bold text-emerald-400/80 uppercase tracking-widest">Protocol Active</p>
@@ -700,16 +698,16 @@ export default function Dashboard() {
         <div className="mt-10 p-8 rounded-[2.5rem] bg-muted/10 border border-border/20 flex flex-col md:flex-row items-center justify-between gap-8 opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-700">
           <div className="flex items-center gap-10 flex-wrap justify-center md:justify-start">
              <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-               <ShieldCheck className="h-4 w-4 text-brandblue-500" /> PCI-DSS 4.0
+               <Shield className="h-4 w-4 text-brandblue-500" /> PCI-DSS 4.0
              </div>
              <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-               <ShieldCheck className="h-4 w-4 text-brandblue-500" /> BSP REGULATED
+               <Shield className="h-4 w-4 text-brandblue-500" /> BSP REGULATED
              </div>
              <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-               <ShieldCheck className="h-4 w-4 text-brandblue-500" /> AES-256 ENCRYPTED
+               <Shield className="h-4 w-4 text-brandblue-500" /> AES-256 ENCRYPTED
              </div>
              <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-               <ShieldCheck className="h-4 w-4 text-brandblue-500" /> ISO 27001
+               <Shield className="h-4 w-4 text-brandblue-500" /> ISO 27001
              </div>
           </div>
           <div className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-[0.1em] text-center md:text-right leading-relaxed">

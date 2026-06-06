@@ -105,9 +105,6 @@ export default function Login() {
     const loginSectionRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Force dark mode for login page for consistent branding
-        document.documentElement.classList.add('dark');
-
         fetch('/api/v1/auth/telegram-login-config')
             .then(r => r.ok ? r.json() : null)
             .then(d => d?.bot_username && setBotUsername(d.bot_username))
@@ -153,10 +150,7 @@ export default function Login() {
                             <img src="/logo.svg" alt="Logo" className="h-7 w-7" />
                         </div>
                         <div className="hidden sm:block">
-                            <div className="flex items-center gap-1.5">
-                                <h2 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">{APP_NAME}</h2>
-                                <ShieldCheck className="h-4 w-4 text-brandblue-400 fill-brandblue-400/10" />
-                            </div>
+                            <h2 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">{APP_NAME}</h2>
                             <p className="text-[10px] font-black text-brandblue-400 uppercase tracking-[0.4em] mt-1.5 leading-none">Philippines</p>
                         </div>
                     </div>

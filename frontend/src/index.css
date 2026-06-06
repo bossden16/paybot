@@ -75,7 +75,7 @@
     --popover: 224 71% 4%;
     --popover-foreground: 213 31% 91%;
 
-    --primary: 211 100% 55%;
+    --primary: 223 100% 59%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 222 47% 11%;
@@ -96,12 +96,23 @@
 
     --sidebar-background: 222 47% 6%;
     --sidebar-foreground: 213 31% 91%;
-    --sidebar-primary: 211 100% 55%;
+    --sidebar-primary: 223 100% 59%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 223 47% 11%;
     --sidebar-accent-foreground: 213 31% 91%;
     --sidebar-border: 216 34% 17%;
     --sidebar-ring: 211 100% 55%;
+
+    --brand-blue-50: 223 100% 97%;
+    --brand-blue-100: 223 100% 93%;
+    --brand-blue-200: 223 100% 85%;
+    --brand-blue-300: 223 90% 72%;
+    --brand-blue-400: 223 90% 65%;
+    --brand-blue-500: 223 100% 59%;
+    --brand-blue-600: 223 100% 50%;
+    --brand-blue-700: 223 100% 40%;
+    --brand-blue-800: 223 100% 30%;
+    --brand-blue-900: 223 100% 20%;
   }
 }
 
