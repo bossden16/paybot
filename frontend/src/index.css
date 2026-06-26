@@ -398,6 +398,27 @@
   overflow: hidden;
   pointer-events: none;
 }
+
+/* Accessibility: Visible keyboard focus styles */
+@layer components {
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+    box-shadow: 0 0 0 4px color-mix(in srgb, hsl(var(--ring)) 12%, transparent);
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Ensure interactive elements are visibly distinguishable on keyboard focus */
+  .fintech-card a:focus-visible, .fintech-card button:focus-visible {
+    box-shadow: 0 0 0 6px color-mix(in srgb, hsl(var(--ring)) 10%, transparent);
+  }
+}
 .progress-bar-fill {
   height: 100%;
   width: 100%;
