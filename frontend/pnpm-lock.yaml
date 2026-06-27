@@ -202,9 +202,6 @@ devDependencies:
   autoprefixer:
     specifier: ^10.4.20
     version: 10.4.23(postcss@8.5.10)
-  axe-core:
-    specifier: ^4.12.1
-    version: 4.12.1
   eslint:
     specifier: ^9.9.0
     version: 9.39.2
@@ -224,7 +221,7 @@ devDependencies:
     specifier: ^1.55.0
     version: 1.58.0
   postcss:
-    specifier: ^8.5.10
+    specifier: ^8.4.47
     version: 8.5.10
   tailwindcss:
     specifier: ^3.4.11
@@ -2817,11 +2814,6 @@ packages:
       picocolors: 1.1.1
       postcss: 8.5.10
       postcss-value-parser: 4.2.0
-    dev: true
-
-  /axe-core@4.12.1:
-    resolution: {integrity: sha512-s7iGf5GaVMxEG0ENN9x+xTr7GFZCb1ZP/1uATUpCEK2X78nDB3RwbtFCo9pGAf9ru+VwoQ464DkaLEeRM08wJA==}
-    engines: {node: '>=4'}
     dev: true
 
   /axios@1.16.1:
