@@ -157,6 +157,7 @@ export default function WalletPage() {
   const [topupAmount, setTopupAmount] = useState('');
   const [topupNote, setTopupNote] = useState('');
   const [topupLoading, setTopupLoading] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -206,6 +207,7 @@ export default function WalletPage() {
     if (!depositChannel) { toast.error('Choose a funding channel'); return; }
     if (!depositAccount.trim()) { toast.error('Enter your transfer account or reference'); return; }
     if (!depositMethod.trim()) { toast.error('Select a transfer method'); return; }
+    if (!receiptFile) { toast.error('Upload the proof of transfer receipt'); return; }
 
     setDepositLoading(true);
     try {
@@ -215,12 +217,19 @@ export default function WalletPage() {
       formData.append('account_number', depositAccount.trim());
       formData.append('transfer_method', depositMethod.trim());
       if (depositRef.trim()) formData.append('ref_number', depositRef.trim());
+      formData.append('receipt', receiptFile);
 
       const res = await fetch('/api/v1/bank-deposits', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.id) {
         toast.success('PHP deposit request submitted for review');
-        setDepositAmount(''); setDepositChannel('Security Bank Corporation'); setDepositAccount(''); setDepositMethod('Bank Transfer'); setDepositRef('');
+        setDepositAmount('');
+        setDepositChannel('BDO');
+        setDepositAccount('');
+        setDepositMethod('same_bank');
+        setDepositRef('');
+        setReceiptFile(null);
+        setFundStep(1);
         await fetchData();
       } else {
         toast.error(data.detail || 'Failed to submit deposit request');
@@ -228,6 +237,41 @@ export default function WalletPage() {
     } catch {
       toast.error('Network error. Please try again.');
     } finally { setDepositLoading(false); }
+  };
+
+  const handleFundStepAdvance = () => {
+    if (fundStep === 1) {
+      setFundStep(2);
+      return;
+    }
+    if (fundStep === 2) {
+      if (!depositChannel) {
+        toast.error('Choose a bank where you want to deposit');
+        return;
+      }
+      setFundStep(3);
+      return;
+    }
+    if (fundStep === 3) {
+      const amount = parseFloat(depositAmount);
+      if (!amount || amount <= 0) {
+        toast.error('Enter a valid deposit amount');
+        return;
+      }
+      if (!depositAccount.trim()) {
+        toast.error('Enter your transfer account or reference');
+        return;
+      }
+      if (!depositMethod.trim()) {
+        toast.error('Select a transfer method');
+        return;
+      }
+      setFundStep(4);
+      return;
+    }
+    if (fundStep === 4) {
+      setFundStep(5);
+    }
   };
 
   const handleTopupRequest = async () => {
@@ -339,6 +383,8 @@ export default function WalletPage() {
   }
 
   const bankList = bankOptions.length > 0 ? bankOptions : BANKS.map(b => ({ code: b, name: b }));
+  const selectedBankName = bankList.find(bank => bank.code === depositChannel)?.name || depositChannel;
+  const selectedTransferMethod = TOPUP_METHODS.find(method => method.value === depositMethod)?.label || depositMethod;
 
   return (
     <Layout>
@@ -446,62 +492,117 @@ export default function WalletPage() {
                   <CardContent className="space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-500">Step {fundStep} of 2</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Step {fundStep} of 5</p>
                         <h2 className="text-lg font-semibold text-slate-900">Top up your wallet</h2>
                       </div>
                       <p className="text-xs text-slate-500 max-w-xl">
-                        Choose a top-up route, then complete the payment details and submit proof for review.
+                        Follow the deposit steps, submit your transfer details, and upload the proof for review.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {FUND_WALLET_METHODS.map(method => (
-                        <button
-                          key={method.value}
-                          type="button"
-                          onClick={() => setFundMethod(method.value as 'bank_transfer' | 'ubp_bills_payment')}
-                          className={`rounded-2xl border p-4 text-left transition ${fundMethod === method.value ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                    <div className="flex flex-wrap gap-2">
+                      {[1, 2, 3, 4, 5].map(step => (
+                        <div
+                          key={step}
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${fundStep >= step ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold text-slate-900">{method.label}</span>
-                            <span className={`h-2.5 w-2.5 rounded-full ${fundMethod === method.value ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          </div>
-                          <p className="text-xs text-slate-500 mt-2">{method.description}</p>
-                        </button>
+                          {step === 1 && 'Instructions'}
+                          {step === 2 && 'Bank List'}
+                          {step === 3 && 'Details'}
+                          {step === 4 && 'Confirm'}
+                          {step === 5 && 'Receipt'}
+                        </div>
                       ))}
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">{fundMethod === 'bank_transfer' ? 'Bank Transfer Instructions' : 'UBP Bills Payment Instructions'}</p>
-                      <div className="mt-3 text-sm text-slate-700 space-y-2">
-                        {fundMethod === 'bank_transfer' ? (
-                          <>
-                            <p>1. Log in to your bank app or portal.</p>
-                            <p>2. Transfer to one of Xendit&apos;s bank accounts below.</p>
-                            <p>3. Use the selected destination and method when you submit proof.</p>
-                          </>
-                        ) : (
-                          <>
-                            <p>1. Open UnionBank bills payment.</p>
-                            <p>2. Choose &ldquo;XENDIT BALANCE TOP-UP&rdquo; as the biller.</p>
-                            <p>3. Enter your payment code and amount, then submit proof.</p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {fundStep === 1 ? (
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <Button
-                          variant="outline"
-                          onClick={() => setFundStep(2)}
-                          className="w-full sm:w-auto"
-                        >
-                          Continue to payment details
-                        </Button>
-                      </div>
-                    ) : (
+                    {fundStep === 1 && (
                       <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {FUND_WALLET_METHODS.map(method => (
+                            <button
+                              key={method.value}
+                              type="button"
+                              onClick={() => setFundMethod(method.value as 'bank_transfer' | 'ubp_bills_payment')}
+                              className={`rounded-2xl border p-4 text-left transition ${fundMethod === method.value ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-semibold text-slate-900">{method.label}</span>
+                                <span className={`h-2.5 w-2.5 rounded-full ${fundMethod === method.value ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              </div>
+                              <p className="text-xs text-slate-500 mt-2">{method.description}</p>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">{fundMethod === 'bank_transfer' ? 'Step 1: Deposit instructions' : 'Step 1: Deposit instructions'}</p>
+                          <div className="mt-3 text-sm text-slate-700 space-y-2">
+                            {fundMethod === 'bank_transfer' ? (
+                              <>
+                                <p>1. Choose a bank from the next step and note the account details.</p>
+                                <p>2. Transfer the amount from your bank app or e-wallet to the selected destination.</p>
+                                <p>3. Enter your transfer details, choose the deposit amount, and upload the receipt on the final step.</p>
+                              </>
+                            ) : (
+                              <>
+                                <p>1. Open UnionBank bills payment.</p>
+                                <p>2. Choose &ldquo;XENDIT BALANCE TOP-UP&rdquo; as the biller.</p>
+                                <p>3. Enter your payment code and amount, then submit the proof on the final step.</p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <Button onClick={handleFundStepAdvance} className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white">
+                            Continue to bank options
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {fundStep === 2 && (
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Step 2: Choose where to deposit</p>
+                          <p className="mt-2 text-sm text-slate-700">Select the bank or channel where you will send the funds.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {bankList.map(bank => (
+                            <button
+                              key={bank.code}
+                              type="button"
+                              onClick={() => setDepositChannel(bank.code)}
+                              className={`rounded-2xl border p-4 text-left transition ${depositChannel === bank.code ? 'border-slate-900 bg-slate-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-semibold text-slate-900">{bank.name}</span>
+                                <span className={`h-2.5 w-2.5 rounded-full ${depositChannel === bank.code ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              </div>
+                              <p className="text-xs text-slate-500 mt-2">{bank.code}</p>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <Button variant="outline" onClick={() => setFundStep(1)} className="w-full sm:w-auto">
+                            Back
+                          </Button>
+                          <Button onClick={handleFundStepAdvance} className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white">
+                            Continue to details
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {fundStep === 3 && (
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Step 3: Submit your transfer details</p>
+                          <p className="mt-2 text-sm text-slate-700">Enter the amount and the transfer details you will use for the deposit.</p>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <Label className="text-xs font-medium text-slate-700">Amount (₱)</Label>
@@ -549,32 +650,88 @@ export default function WalletPage() {
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-xs font-medium text-slate-700">Reference Number</Label>
+                            <Label className="text-xs font-medium text-slate-700">Transfer Account / Reference</Label>
                             <Input
-                              placeholder="TRF-12345"
-                              value={depositRef}
-                              onChange={e => setDepositRef(e.target.value)}
+                              placeholder="Sender account or transfer reference"
+                              value={depositAccount}
+                              onChange={e => setDepositAccount(e.target.value)}
                               className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
                             />
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="text-sm font-semibold text-slate-900">Review top-up details</p>
-                          <div className="mt-3 text-sm text-slate-700 space-y-2">
-                            <p><span className="font-medium">Method:</span> {FUND_WALLET_METHODS.find(m => m.value === fundMethod)?.label}</p>
-                            <p><span className="font-medium">Destination:</span> {depositChannel}</p>
-                            <p><span className="font-medium">Amount:</span> ₱{depositAmount || '0.00'}</p>
-                            <p><span className="font-medium">Transfer type:</span> {TOPUP_METHODS.find(m => m.value === depositMethod)?.label}</p>
-                          </div>
+                        <div>
+                          <Label className="text-xs font-medium text-slate-700">Reference Number</Label>
+                          <Input
+                            placeholder="TRF-12345"
+                            value={depositRef}
+                            onChange={e => setDepositRef(e.target.value)}
+                            className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                          />
                         </div>
 
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <Button
-                            variant="outline"
-                            onClick={() => setFundStep(1)}
-                            className="w-full sm:w-auto"
-                          >
+                          <Button variant="outline" onClick={() => setFundStep(2)} className="w-full sm:w-auto">
+                            Back
+                          </Button>
+                          <Button onClick={handleFundStepAdvance} className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white">
+                            Review details
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {fundStep === 4 && (
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Step 4: Confirm deposit details</p>
+                          <p className="mt-2 text-sm text-slate-700">Review every field before you continue to the upload step.</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2 text-sm text-slate-700">
+                          <p><span className="font-medium">Method:</span> {FUND_WALLET_METHODS.find(m => m.value === fundMethod)?.label}</p>
+                          <p><span className="font-medium">Destination:</span> {selectedBankName}</p>
+                          <p><span className="font-medium">Amount:</span> ₱{depositAmount || '0.00'}</p>
+                          <p><span className="font-medium">Transfer type:</span> {selectedTransferMethod}</p>
+                          <p><span className="font-medium">Transfer account:</span> {depositAccount.trim() || 'Not provided'}</p>
+                          {depositRef.trim() && <p><span className="font-medium">Reference number:</span> {depositRef}</p>}
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <Button variant="outline" onClick={() => setFundStep(3)} className="w-full sm:w-auto">
+                            Back
+                          </Button>
+                          <Button onClick={handleFundStepAdvance} className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white">
+                            Upload receipt
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {fundStep === 5 && (
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Step 5: Upload your receipt</p>
+                          <p className="mt-2 text-sm text-slate-700">Attach the proof of transfer so the request can be reviewed by the admin.</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                          <Label className="text-xs font-medium text-slate-700">Receipt file</Label>
+                          <Input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                            className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900"
+                          />
+                          {receiptFile ? (
+                            <p className="text-xs text-slate-500">Selected file: {receiptFile.name}</p>
+                          ) : (
+                            <p className="text-xs text-slate-500">Please upload the receipt screenshot or PDF before submitting.</p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <Button variant="outline" onClick={() => setFundStep(4)} className="w-full sm:w-auto">
                             Back
                           </Button>
                           <Button
@@ -583,7 +740,7 @@ export default function WalletPage() {
                             className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white"
                           >
                             {depositLoading ? (
-                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submit Request</>
+                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting Request</>
                             ) : (
                               <><ArrowDownToLine className="h-4 w-4 mr-2" />Submit Request</>
                             )}
