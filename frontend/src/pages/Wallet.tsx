@@ -1,0 +1,755 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { client } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import Layout from '@/components/Layout';
+import {
+  Wallet, DollarSign, ArrowUpFromLine, ArrowDownToLine, Send, Bitcoin,
+  Loader2, ChevronRight, Clock, CheckCircle, XCircle, Building2, Landmark,
+  CreditCard, Receipt, AlertCircle, ArrowRight, Globe, Wallet2, Landmark2
+} from 'lucide-react';
+
+// ─── Types ──────────────────────────────────────────────────────────
+interface WalletBalance {
+  balance: number;
+  currency: string;
+  updated_at?: string;
+}
+
+interface WalletTxn {
+  id: number;
+  type: 'deposit' | 'withdraw' | 'receive' | 'sent' | 'crypto_topup' | 'usdt_send' | 'disbursement' | 'refund';
+  amount: number;
+  currency: string;
+  status: 'completed' | 'pending' | 'failed' | 'cancelled';
+  description?: string;
+  created_at: string;
+  reference?: string;
+}
+
+interface BankOption {
+  code: string;
+  name: string;
+}
+
+interface WithdrawRequest {
+  id: number;
+  amount: number;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  note?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'processing' | 'completed';
+  created_at: string;
+  processed_at?: string;
+  processed_by?: string;
+  rejection_reason?: string;
+  request_type: 'php_bank' | 'usdt_trc20';
+  usdt_address?: string;
+  usdt_platform?: string;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────
+const BANKS: string[] = [
+  'BDO', 'BPI', 'Metrobank', 'UnionBank', 'Landbank', 'PNB',
+  'Chinabank', 'RCBC', 'Security Bank', 'EastWest', 'GCash', 'Maya'
+];
+
+const USDT_PLATFORMS: { code: string; name: string }[] = [
+  { code: 'binance', name: 'Binance' },
+  { code: 'trust_wallet', name: 'Trust Wallet' },
+  { code: 'metamask', name: 'MetaMask' },
+  { code: 'okx', name: 'OKX' },
+  { code: 'bybit', name: 'Bybit' },
+  { code: 'kucoin', name: 'KuCoin' },
+  { code: 'gate_io', name: 'Gate.io' },
+  { code: 'tronlink', name: 'TronLink' },
+  { code: 'other', name: 'Other / Custom' },
+];
+
+const txnMeta: Record<string, { label: string; color: string; icon: React.ReactNode; sign: string }> = {
+  deposit:       { label: 'Deposit', color: 'text-emerald-600', icon: <ArrowDownToLine className="h-4 w-4" />, sign: '+' },
+  withdraw:      { label: 'Withdrawal', color: 'text-amber-600', icon: <ArrowUpFromLine className="h-4 w-4" />, sign: '-' },
+  receive:       { label: 'Received', color: 'text-emerald-600', icon: <ArrowDownToLine className="h-4 w-4" />, sign: '+' },
+  sent:          { label: 'Sent', color: 'text-red-600', icon: <Send className="h-4 w-4" />, sign: '-' },
+  crypto_topup:  { label: 'Crypto Top Up', color: 'text-teal-600', icon: <Bitcoin className="h-4 w-4" />, sign: '+' },
+  usdt_send:     { label: 'USDT Withdrawal', color: 'text-red-600', icon: <Send className="h-4 w-4" />, sign: '-' },
+  disbursement:  { label: 'Disbursement', color: 'text-red-600', icon: <Send className="h-4 w-4" />, sign: '-' },
+  refund:        { label: 'Refund', color: 'text-emerald-600', icon: <Receipt className="h-4 w-4" />, sign: '+' },
+};
+
+const statusMeta: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  pending:   { label: 'Pending', color: 'text-amber-600', bg: 'bg-amber-50', icon: <Clock className="h-3.5 w-3.5" /> },
+  approved:  { label: 'Approved', color: 'text-blue-600', bg: 'bg-blue-50', icon: <CheckCircle className="h-3.5 w-3.5" /> },
+  processing:{ label: 'Processing', color: 'text-indigo-600', bg: 'bg-indigo-50', icon: <Loader2 className="h-3.5 w-3.5 animate-spin" /> },
+  completed: { label: 'Completed', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: <CheckCircle className="h-3.5 w-3.5" /> },
+  rejected:  { label: 'Rejected', color: 'text-red-600', bg: 'bg-red-50', icon: <XCircle className="h-3.5 w-3.5" /> },
+  failed:    { label: 'Failed', color: 'text-red-600', bg: 'bg-red-50', icon: <XCircle className="h-3.5 w-3.5" /> },
+  cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-50', icon: <XCircle className="h-3.5 w-3.5" /> },
+};
+
+const fmt = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const fmtUsd = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ─── Component ───────────────────────────────────────────────────────
+export default function WalletPage() {
+  const { user, loading: authLoading } = useAuth();
+  const [phpBalance, setPhpBalance] = useState<WalletBalance | null>(null);
+  const [usdBalance, setUsdBalance] = useState<WalletBalance | null>(null);
+  const [transactions, setTransactions] = useState<WalletTxn[]>([]);
+  const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [bankOptions, setBankOptions] = useState<BankOption[]>([]);
+
+  // PHP Bank Withdraw Request form state
+  const [wrAmount, setWrAmount] = useState('');
+  const [wrBank, setWrBank] = useState('');
+  const [wrAccount, setWrAccount] = useState('');
+  const [wrName, setWrName] = useState('');
+  const [wrNote, setWrNote] = useState('');
+  const [wrLoading, setWrLoading] = useState(false);
+
+  // USDT Withdraw Request form state
+  const [usdtAmount, setUsdtAmount] = useState('');
+  const [usdtAddress, setUsdtAddress] = useState('');
+  const [usdtPlatform, setUsdtPlatform] = useState('');
+  const [usdtLoading, setUsdtLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [phpRes, usdRes, txnRes, banksRes, wrRes] = await Promise.allSettled([
+        client.apiCall.invoke({ url: '/api/v1/wallet/balance?currency=PHP', method: 'GET', data: {} }),
+        client.apiCall.invoke({ url: '/api/v1/wallet/balance?currency=USD', method: 'GET', data: {} }),
+        client.apiCall.invoke({ url: '/api/v1/wallet/transactions?limit=20', method: 'GET', data: {} }),
+        client.apiCall.invoke({ url: '/api/v1/gateway/banks', method: 'GET', data: {} }),
+        client.apiCall.invoke({ url: '/api/v1/wallet/withdraw-requests', method: 'GET', data: {} }),
+      ]);
+
+      if (phpRes.status === 'fulfilled' && phpRes.value?.data?.balance != null) {
+        setPhpBalance({ balance: phpRes.value.data.balance, currency: 'PHP' });
+      }
+      if (usdRes.status === 'fulfilled' && usdRes.value?.data?.balance != null) {
+        setUsdBalance({ balance: usdRes.value.data.balance, currency: 'USD' });
+      }
+      if (txnRes.status === 'fulfilled' && txnRes.value?.data?.items) {
+        setTransactions(txnRes.value.data.items);
+      }
+      if (banksRes.status === 'fulfilled' && banksRes.value?.data?.banks) {
+        setBankOptions(banksRes.value.data.banks);
+      }
+      if (wrRes.status === 'fulfilled' && wrRes.value?.data?.requests) {
+        setWithdrawRequests(wrRes.value.data.requests);
+      }
+    } catch (err) {
+      console.error('Wallet fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchData();
+  }, [user, fetchData]);
+
+  const handlePhpWithdrawRequest = async () => {
+    const amount = parseFloat(wrAmount);
+    if (!amount || amount <= 0) { toast.error('Enter a valid amount'); return; }
+    if (!wrBank) { toast.error('Select a bank'); return; }
+    if (!wrAccount.trim()) { toast.error('Enter account number'); return; }
+    if (!wrName.trim()) { toast.error('Enter account holder name'); return; }
+    if (phpBalance && amount > phpBalance.balance) { toast.error('Insufficient balance'); return; }
+
+    setWrLoading(true);
+    try {
+      const res = await fetch('/api/v1/wallet/withdraw-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: 'php_bank',
+          amount,
+          bank_name: wrBank,
+          account_number: wrAccount.trim(),
+          account_name: wrName.trim(),
+          note: wrNote.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('PHP withdrawal request submitted for admin approval');
+        setWrAmount(''); setWrBank(''); setWrAccount(''); setWrName(''); setWrNote('');
+        await fetchData();
+      } else {
+        toast.error(data.message || 'Failed to submit request');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally { setWrLoading(false); }
+  };
+
+  const handleUsdtWithdrawRequest = async () => {
+    const amount = parseFloat(usdtAmount);
+    if (!amount || amount <= 0) { toast.error('Enter a valid USDT amount'); return; }
+    if (!usdtAddress.trim()) { toast.error('Enter your USDT address'); return; }
+    if (!usdtPlatform) { toast.error('Select which platform your address belongs to'); return; }
+    if (usdBalance && amount > usdBalance.balance) { toast.error('Insufficient USDT balance'); return; }
+
+    setUsdtLoading(true);
+    try {
+      const res = await fetch('/api/v1/wallet/withdraw-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: 'usdt_trc20',
+          amount,
+          usdt_address: usdtAddress.trim(),
+          usdt_platform: usdtPlatform,
+          network: 'TRC20',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('USDT withdrawal request submitted for admin approval');
+        setUsdtAmount(''); setUsdtAddress(''); setUsdtPlatform('');
+        await fetchData();
+      } else {
+        toast.error(data.message || 'Failed to submit request');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally { setUsdtLoading(false); }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-slate-500">Please log in to view your wallet.</p>
+      </div>
+    );
+  }
+
+  const bankList = bankOptions.length > 0 ? bankOptions : BANKS.map(b => ({ code: b, name: b }));
+
+  return (
+    <Layout>
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-slate-900 flex items-center gap-2">
+            <Wallet className="h-6 w-6 text-slate-500" />
+            Wallet
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage your PHP and USDT balances, request withdrawals, and view transaction history.
+          </p>
+        </div>
+
+        {/* Balance Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          {/* PHP Balance */}
+          <Card className="bg-white border border-slate-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">PHP Wallet</span>
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                  <Landmark className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {loading ? (
+                  <span className="inline-block w-28 h-8 bg-slate-100 rounded-lg animate-pulse" />
+                ) : `₱${fmt(phpBalance?.balance || 0)}`}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Philippine Peso</p>
+            </CardContent>
+          </Card>
+
+          {/* USD Balance */}
+          <Card className="bg-white border border-slate-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">USDT Wallet</span>
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                  <DollarSign className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {loading ? (
+                  <span className="inline-block w-28 h-8 bg-slate-100 rounded-lg animate-pulse" />
+                ) : `$${fmtUsd(usdBalance?.balance || 0)}`}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">USDT · TRC-20 Network</p>
+            </CardContent>
+          </Card>
+
+          {/* Quick Stats */}
+          <Card className="bg-white border border-slate-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending Requests</span>
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                  <Clock className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {loading ? (
+                  <span className="inline-block w-12 h-8 bg-slate-100 rounded-lg animate-pulse" />
+                ) : withdrawRequests.filter(r => r.status === 'pending').length}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Awaiting admin approval</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Tabs */}
+        <Tabs defaultValue="php" className="space-y-6">
+          <TabsList className="bg-white border border-slate-200 p-1">
+            <TabsTrigger value="php" className="text-xs font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
+              <Landmark className="h-3.5 w-3.5 mr-1.5" />
+              PHP Withdraw
+            </TabsTrigger>
+            <TabsTrigger value="usdt" className="text-xs font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
+              <Globe className="h-3.5 w-3.5 mr-1.5" />
+              USDT Withdraw
+            </TabsTrigger>
+            <TabsTrigger value="history" className="text-xs font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
+              <Receipt className="h-3.5 w-3.5 mr-1.5" />
+              History
+            </TabsTrigger>
+            <TabsTrigger value="requests" className="text-xs font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
+              <Clock className="h-3.5 w-3.5 mr-1.5" />
+              My Requests
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ─── PHP WITHDRAW TAB ─── */}
+          <TabsContent value="php" className="mt-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* PHP Withdraw Form */}
+              <Card className="lg:col-span-2 bg-white border border-slate-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-slate-500" />
+                    Request PHP Withdrawal to Bank
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Info Banner */}
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800">Admin Approval Required</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Your withdrawal request will be sent to the Super Admin for review and approval. 
+                        Processing typically takes 1-2 business days.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Amount (₱)</Label>
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={wrAmount}
+                        onChange={e => setWrAmount(e.target.value)}
+                        min="1"
+                        step="0.01"
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                      {phpBalance && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Available: ₱{fmt(phpBalance.balance)}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Bank</Label>
+                      <Select value={wrBank} onValueChange={setWrBank}>
+                        <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900">
+                          <SelectValue placeholder="Select bank…" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-slate-200">
+                          {bankList.map(b => (
+                            <SelectItem key={b.code} value={b.code} className="text-slate-900">
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Account Number</Label>
+                      <Input
+                        placeholder="1234567890"
+                        value={wrAccount}
+                        onChange={e => setWrAccount(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Account Holder Name</Label>
+                      <Input
+                        placeholder="Juan Dela Cruz"
+                        value={wrName}
+                        onChange={e => setWrName(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-medium text-slate-700">Note (optional)</Label>
+                      <Input
+                        placeholder="Additional instructions for admin..."
+                        value={wrNote}
+                        onChange={e => setWrNote(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handlePhpWithdrawRequest}
+                    disabled={wrLoading}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10 rounded-lg font-medium"
+                  >
+                    {wrLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting Request...</>
+                    ) : (
+                      <><ArrowUpFromLine className="h-4 w-4 mr-2" />Submit PHP Withdrawal Request</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Supported Banks */}
+              <Card className="bg-white border border-slate-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-slate-500" />
+                    Supported Banks
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    {BANKS.slice(0, 8).map(bank => (
+                      <div key={bank} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                        <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                        {bank}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+                    Including GCash and Maya e-wallets
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ─── USDT WITHDRAW TAB ─── */}
+          <TabsContent value="usdt" className="mt-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* USDT Withdraw Form */}
+              <Card className="lg:col-span-2 bg-white border border-slate-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-slate-500" />
+                    Request USDT Withdrawal
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Info Banner */}
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800">Admin Approval Required · TRC-20 Only</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Your USDT withdrawal request will be sent to the Super Admin for review. 
+                        Ensure your address supports TRC-20 network. Processing typically takes 1-2 business days.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Network Badge */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-medium text-emerald-800">Network: TRC-20 (Tron)</span>
+                    <span className="text-xs text-emerald-600 ml-auto">Fixed</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Amount (USDT)</Label>
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={usdtAmount}
+                        onChange={e => setUsdtAmount(e.target.value)}
+                        min="1"
+                        step="0.01"
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                      {usdBalance && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Available: ${fmtUsd(usdBalance.balance)} USDT
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Platform / Wallet</Label>
+                      <Select value={usdtPlatform} onValueChange={setUsdtPlatform}>
+                        <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900">
+                          <SelectValue placeholder="Select your platform…" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-slate-200">
+                          {USDT_PLATFORMS.map(p => (
+                            <SelectItem key={p.code} value={p.code} className="text-slate-900">
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-medium text-slate-700">USDT Address (TRC-20)</Label>
+                      <Input
+                        placeholder="TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                        value={usdtAddress}
+                        onChange={e => setUsdtAddress(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 font-mono text-sm"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Must start with "T" and be 34 characters long. Double-check before submitting.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleUsdtWithdrawRequest}
+                    disabled={usdtLoading}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10 rounded-lg font-medium"
+                  >
+                    {usdtLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting Request...</>
+                    ) : (
+                      <><Send className="h-4 w-4 mr-2" />Submit USDT Withdrawal Request</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Supported Platforms Info */}
+              <Card className="bg-white border border-slate-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Wallet2 className="h-4 w-4 text-slate-500" />
+                    Supported Platforms
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    {USDT_PLATFORMS.map(p => (
+                      <div key={p.code} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                        <Globe className="h-3.5 w-3.5 text-slate-400" />
+                        {p.name}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <p className="text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">Network:</span> TRC-20 only
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      <span className="font-medium text-slate-700">Min amount:</span> 10 USDT
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      <span className="font-medium text-slate-700">Fee:</span> 1 USDT network fee
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ─── HISTORY TAB ─── */}
+          <TabsContent value="history" className="mt-0">
+            <Card className="bg-white border border-slate-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-slate-500" />
+                  Transaction History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 animate-pulse">
+                        <div className="h-9 w-9 rounded-lg bg-slate-200 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 bg-slate-200 rounded w-1/3" />
+                          <div className="h-2.5 bg-slate-200 rounded w-1/4" />
+                        </div>
+                        <div className="h-4 w-20 bg-slate-200 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                ) : transactions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Receipt className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-900">No transactions yet</p>
+                    <p className="text-xs text-slate-500 mt-1">Your transaction history will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {transactions.map(txn => {
+                      const meta = txnMeta[txn.type] || txnMeta.deposit;
+                      const st = statusMeta[txn.status] || statusMeta.pending;
+                      return (
+                        <div key={txn.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center ${meta.color}`}>
+                              {meta.icon}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">{meta.label}</p>
+                              <p className="text-xs text-slate-500">
+                                {txn.description || txn.reference || `#${txn.id}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-semibold ${meta.color}`}>
+                              {meta.sign}{txn.currency === 'USD' ? '$' : '₱'}{fmt(Math.abs(txn.amount))}
+                            </p>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${st.bg} ${st.color} ${st.bg.replace('bg-', 'border-').replace('50', '200')}`}>
+                              {st.icon}
+                              {st.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ─── MY REQUESTS TAB ─── */}
+          <TabsContent value="requests" className="mt-0">
+            <Card className="bg-white border border-slate-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-slate-500" />
+                  My Withdrawal Requests
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 animate-pulse">
+                        <div className="h-9 w-9 rounded-lg bg-slate-200 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 bg-slate-200 rounded w-1/3" />
+                          <div className="h-2.5 bg-slate-200 rounded w-1/4" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : withdrawRequests.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Clock className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-900">No withdrawal requests</p>
+                    <p className="text-xs text-slate-500 mt-1">Submit a request from the PHP or USDT tab</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {withdrawRequests.map(req => {
+                      const st = statusMeta[req.status] || statusMeta.pending;
+                      const isUsdt = req.request_type === 'usdt_trc20';
+                      return (
+                        <div key={req.id} className="p-4 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${st.bg} ${st.color}`}>
+                                {st.icon}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {isUsdt ? `$${fmtUsd(req.amount)} USDT` : `₱${fmt(req.amount)}`}
+                                  </p>
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${st.bg} ${st.color} ${st.bg.replace('bg-', 'border-').replace('50', '200')}`}>
+                                    {st.label}
+                                  </span>
+                                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                    {isUsdt ? 'USDT · TRC-20' : 'PHP · Bank'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">
+                                  {isUsdt ? (
+                                    <>
+                                      {req.usdt_platform && `${USDT_PLATFORMS.find(p => p.code === req.usdt_platform)?.name || req.usdt_platform} · `}
+                                      {req.usdt_address}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {req.bank_name} · {req.account_number} · {req.account_name}
+                                    </>
+                                  )}
+                                </p>
+                                {req.note && (
+                                  <p className="text-xs text-slate-500 mt-1 italic">
+                                    Note: {req.note}
+                                  </p>
+                                )}
+                                {req.rejection_reason && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    Reason: {req.rejection_reason}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs text-slate-500">
+                                {new Date(req.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                              {req.processed_at && (
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  Processed: {new Date(req.processed_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </Layout>
+  );
+}
