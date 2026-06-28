@@ -74,6 +74,13 @@ const USDT_PLATFORMS: { code: string; name: string }[] = [
   { code: 'other', name: 'Other / Custom' },
 ];
 
+const DEPOSIT_CHANNELS = [
+  { value: 'Security Bank Corporation', label: 'Security Bank' },
+  { value: 'Asia United Bank', label: 'Asia United Bank' },
+  { value: 'GCash', label: 'GCash' },
+  { value: 'Maya', label: 'Maya' },
+];
+
 const txnMeta: Record<string, { label: string; color: string; icon: React.ReactNode; sign: string }> = {
   deposit:       { label: 'Deposit', color: 'text-emerald-600', icon: <ArrowDownToLine className="h-4 w-4" />, sign: '+' },
   withdraw:      { label: 'Withdrawal', color: 'text-amber-600', icon: <ArrowUpFromLine className="h-4 w-4" />, sign: '-' },
@@ -107,6 +114,15 @@ export default function WalletPage() {
   const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [bankOptions, setBankOptions] = useState<BankOption[]>([]);
+  const [usdtPhpRate, setUsdtPhpRate] = useState<number | null>(null);
+
+  // PHP Deposit Request form state
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositChannel, setDepositChannel] = useState('Security Bank Corporation');
+  const [depositAccount, setDepositAccount] = useState('');
+  const [depositMethod, setDepositMethod] = useState('Bank Transfer');
+  const [depositRef, setDepositRef] = useState('');
+  const [depositLoading, setDepositLoading] = useState(false);
 
   // PHP Bank Withdraw Request form state
   const [wrAmount, setWrAmount] = useState('');
@@ -122,15 +138,21 @@ export default function WalletPage() {
   const [usdtPlatform, setUsdtPlatform] = useState('');
   const [usdtLoading, setUsdtLoading] = useState(false);
 
+  // USDT Top-up request form state
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupNote, setTopupNote] = useState('');
+  const [topupLoading, setTopupLoading] = useState(false);
+
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
-      const [phpRes, usdRes, txnRes, banksRes, wrRes] = await Promise.allSettled([
+      const [phpRes, usdRes, txnRes, banksRes, wrRes, rateRes] = await Promise.allSettled([
         client.apiCall.invoke({ url: '/api/v1/wallet/balance?currency=PHP', method: 'GET', data: {} }),
         client.apiCall.invoke({ url: '/api/v1/wallet/balance?currency=USD', method: 'GET', data: {} }),
         client.apiCall.invoke({ url: '/api/v1/wallet/transactions?limit=20', method: 'GET', data: {} }),
         client.apiCall.invoke({ url: '/api/v1/gateway/banks', method: 'GET', data: {} }),
         client.apiCall.invoke({ url: '/api/v1/wallet/withdraw-requests', method: 'GET', data: {} }),
+        client.apiCall.invoke({ url: '/api/v1/topup/rate', method: 'GET', data: {} }),
       ]);
 
       if (phpRes.status === 'fulfilled' && phpRes.value?.data?.balance != null) {
@@ -148,6 +170,9 @@ export default function WalletPage() {
       if (wrRes.status === 'fulfilled' && wrRes.value?.data?.requests) {
         setWithdrawRequests(wrRes.value.data.requests);
       }
+      if (rateRes.status === 'fulfilled' && rateRes.value?.data?.usdt_php_rate != null) {
+        setUsdtPhpRate(rateRes.value.data.usdt_php_rate);
+      }
     } catch (err) {
       console.error('Wallet fetch error:', err);
     } finally {
@@ -159,6 +184,60 @@ export default function WalletPage() {
     if (!user) return;
     fetchData();
   }, [user, fetchData]);
+
+  const handlePhpDepositRequest = async () => {
+    const amount = parseFloat(depositAmount);
+    if (!amount || amount <= 0) { toast.error('Enter a valid deposit amount'); return; }
+    if (!depositChannel) { toast.error('Choose a funding channel'); return; }
+    if (!depositAccount.trim()) { toast.error('Enter your transfer account or reference'); return; }
+    if (!depositMethod.trim()) { toast.error('Select a transfer method'); return; }
+
+    setDepositLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('amount_php', amount.toString());
+      formData.append('channel', depositChannel);
+      formData.append('account_number', depositAccount.trim());
+      formData.append('transfer_method', depositMethod.trim());
+      if (depositRef.trim()) formData.append('ref_number', depositRef.trim());
+
+      const res = await fetch('/api/v1/bank-deposits', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.id) {
+        toast.success('PHP deposit request submitted for review');
+        setDepositAmount(''); setDepositChannel('Security Bank Corporation'); setDepositAccount(''); setDepositMethod('Bank Transfer'); setDepositRef('');
+        await fetchData();
+      } else {
+        toast.error(data.detail || 'Failed to submit deposit request');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally { setDepositLoading(false); }
+  };
+
+  const handleTopupRequest = async () => {
+    const amount = parseFloat(topupAmount);
+    if (!amount || amount <= 0) { toast.error('Enter a valid PHP amount'); return; }
+
+    setTopupLoading(true);
+    try {
+      const res = await fetch('/api/v1/topup/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, currency: 'PHP', note: topupNote.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        toast.success('USDT top-up request submitted for admin approval');
+        setTopupAmount(''); setTopupNote('');
+        await fetchData();
+      } else {
+        toast.error(data.detail || 'Failed to submit top-up request');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally { setTopupLoading(false); }
+  };
 
   const handlePhpWithdrawRequest = async () => {
     const amount = parseFloat(wrAmount);
@@ -256,7 +335,7 @@ export default function WalletPage() {
             Wallet
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your PHP and USDT balances, request withdrawals, and view transaction history.
+            Manage your PHP and USDT balances, fund your wallet with PHP deposits or USDT top-ups, request withdrawals, and view transaction history.
           </p>
         </div>
 
@@ -320,6 +399,10 @@ export default function WalletPage() {
         {/* Main Tabs */}
         <Tabs defaultValue="php" className="space-y-6">
           <TabsList className="bg-white border border-slate-200 p-1">
+            <TabsTrigger value="fund" className="text-xs font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
+              <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" />
+              Fund Wallet
+            </TabsTrigger>
             <TabsTrigger value="php" className="text-xs font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
               <Landmark className="h-3.5 w-3.5 mr-1.5" />
               PHP Withdraw
@@ -337,6 +420,156 @@ export default function WalletPage() {
               My Requests
             </TabsTrigger>
           </TabsList>
+
+          {/* ─── FUND WALLET TAB ─── */}
+          <TabsContent value="fund" className="mt-0">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <Card className="bg-white border border-slate-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <ArrowDownToLine className="h-4 w-4 text-slate-500" />
+                    Deposit PHP to Your Wallet
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <AlertCircle className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-emerald-800">Deposit request · Admin review</p>
+                      <p className="text-xs text-emerald-700 mt-0.5">Submit a PHP deposit request and we will credit your wallet after verification.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Amount (₱)</Label>
+                      <Input
+                        type="number"
+                        placeholder="1000"
+                        value={depositAmount}
+                        onChange={e => setDepositAmount(e.target.value)}
+                        min="1000"
+                        step="0.01"
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Channel</Label>
+                      <Select value={depositChannel} onValueChange={setDepositChannel}>
+                        <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900">
+                          <SelectValue placeholder="Select a channel" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-slate-200">
+                          {DEPOSIT_CHANNELS.map(channel => (
+                            <SelectItem key={channel.value} value={channel.value} className="text-slate-900">
+                              {channel.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Transfer Account / Reference</Label>
+                      <Input
+                        placeholder="Account or reference used"
+                        value={depositAccount}
+                        onChange={e => setDepositAccount(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-700">Transfer Method</Label>
+                      <Input
+                        placeholder="Bank Transfer"
+                        value={depositMethod}
+                        onChange={e => setDepositMethod(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-medium text-slate-700">Reference Number (optional)</Label>
+                      <Input
+                        placeholder="TRF-12345"
+                        value={depositRef}
+                        onChange={e => setDepositRef(e.target.value)}
+                        className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handlePhpDepositRequest}
+                    disabled={depositLoading}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10 rounded-lg font-medium"
+                  >
+                    {depositLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting Request...</>
+                    ) : (
+                      <><ArrowDownToLine className="h-4 w-4 mr-2" />Submit PHP Deposit Request</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white border border-slate-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Bitcoin className="h-4 w-4 text-slate-500" />
+                    Top Up with USDT
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800">USDT → PHP credit</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Enter the PHP amount you want credited. We convert it at the current USDT rate after admin review.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-slate-700">PHP Amount</Label>
+                    <Input
+                      type="number"
+                      placeholder="5000"
+                      value={topupAmount}
+                      onChange={e => setTopupAmount(e.target.value)}
+                      min="100"
+                      step="0.01"
+                      className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                    />
+                    {usdtPhpRate ? (
+                      <p className="text-xs text-slate-500 mt-1">Current rate: ₱{usdtPhpRate.toFixed(2)} PHP per 1 USDT</p>
+                    ) : (
+                      <p className="text-xs text-slate-500 mt-1">Rate will be loaded automatically.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-slate-700">Note (optional)</Label>
+                    <Input
+                      placeholder="Reference for admin"
+                      value={topupNote}
+                      onChange={e => setTopupNote(e.target.value)}
+                      className="mt-1.5 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={handleTopupRequest}
+                    disabled={topupLoading}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10 rounded-lg font-medium"
+                  >
+                    {topupLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting Request...</>
+                    ) : (
+                      <><Bitcoin className="h-4 w-4 mr-2" />Submit USDT Top-Up Request</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
           {/* ─── PHP WITHDRAW TAB ─── */}
           <TabsContent value="php" className="mt-0">

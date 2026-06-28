@@ -301,7 +301,7 @@ async def create_xendit_invoice(
         amount=data.amount,
         external_id=external_id,
         payer_email=data.customer_email,
-        description=data.description or "Invoice",
+        description=data.description or "Click Store",
     )
 
     if not result.get("success"):
@@ -383,7 +383,7 @@ async def create_xendit_qr(
     result = await svc.create_qr_code(
         amount=data.amount,
         external_id=external_id,
-        description=data.description,
+        description=data.description or "Click Store",
     )
     if not result.get("success"):
         try:
@@ -459,7 +459,7 @@ async def create_xendit_payment_link(
         amount=data.amount,
         external_id=external_id,
         payer_email=data.customer_email,
-        description=data.description or "Payment Link",
+        description=data.description or "Click Store",
     )
     if not result.get("success"):
         try:

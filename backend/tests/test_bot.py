@@ -648,6 +648,41 @@ class TestTelegramWebhook:
 
 
 # ---------------------------------------------------------------------------
+# /deposit wizard (PHP wallet deposit flow)
+# ---------------------------------------------------------------------------
+class TestDepositWizard:
+    """Tests for the /deposit wizard that collects PHP deposit details."""
+
+    CHAT_ID = 123456789
+
+    def _body(self, text: str) -> dict:
+        return _webhook_body(text, chat_id=self.CHAT_ID)
+
+    def test_deposit_command_starts_wizard(self, client):
+        """/deposit should start the PHP wallet deposit wizard."""
+        from routers.telegram import _pending
+        _pending.pop(str(self.CHAT_ID), None)
+
+        r = client.post("/api/v1/telegram/webhook", json=self._body("/deposit"))
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+        assert str(self.CHAT_ID) in _pending
+        assert _pending[str(self.CHAT_ID)]["cmd"] == "/deposit"
+        assert _pending[str(self.CHAT_ID)]["step"] == 0
+
+    def test_deposit_wizard_advances_after_channel_input(self, client):
+        """Entering the first deposit field should advance the wizard to the next step."""
+        from routers.telegram import _pending
+        _pending[str(self.CHAT_ID)] = {"cmd": "/deposit", "step": 0, "data": {}}
+
+        r = client.post("/api/v1/telegram/webhook", json=self._body("GCASH"))
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+        assert _pending[str(self.CHAT_ID)]["step"] == 1
+        assert _pending[str(self.CHAT_ID)]["data"]["channel"] == "GCASH"
+
+
+# ---------------------------------------------------------------------------
 # /scanqr wizard (photo upload flow)
 # ---------------------------------------------------------------------------
 def _photo_webhook_body(

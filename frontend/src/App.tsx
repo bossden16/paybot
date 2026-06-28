@@ -130,6 +130,7 @@ function AuthAwareShell() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/transactions" element={<Transactions />} />
+            <Route path="/payments" element={<CreatePayment />} />
             <Route path="/create-payment" element={<CreatePayment />} />
             <Route path="/scan-qrph" element={<ScanQRPH />} />
             <Route path="/xendit" element={<XenditPage />} />

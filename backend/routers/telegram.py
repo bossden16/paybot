@@ -3794,25 +3794,11 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
         # ==================== /deposit ====================
         elif text.startswith("/deposit"):
             parts = text.split(maxsplit=1)
-            if len(parts) > 1:
-                # User provided something after /deposit, likely trying to use it as a command
+            if len(parts) > 1 or text.strip() == "/deposit":
                 await tg.send_message(chat_id, _wizard_start(chat_id, "/deposit"))
             else:
-                # Show instructions and offer the wizard
-                reply = (
-                    "🏦 <b>Deposit PHP</b>\n"
-                    "━━━━━━━━━━━━━━━━━━━━\n"
-                    "You can deposit funds into your PHP wallet by transferring to any of our accounts:\n\n"
-                )
-                for acc in _PAYBOT_ACCOUNTS:
-                    reply += f"🔹 <b>{acc['bank']}</b>\n   Name: <code>{acc['name']}</code>\n   Account: <code>{acc['number']}</code>\n\n"
-
-                reply += (
-                    "✅ <b>After transferring:</b>\n"
-                    "Type /deposit again and follow the wizard to submit your receipt for verification.\n\n"
-                    "<i>Or log in to the <a href='https://paybot.ph/dashboard'>Dashboard</a> for more options.</i>"
-                )
-                await tg.send_message(chat_id, reply)
+                # Fallback for unexpected command shapes.
+                await tg.send_message(chat_id, _wizard_start(chat_id, "/deposit"))
             return {"status": "ok"}
 
         else:

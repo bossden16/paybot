@@ -31,6 +31,13 @@ class XenditService:
         # Xendit uses basic auth with API key as username and empty password
         return (self.secret_key, "")
 
+    def _resolve_descriptor(self, description: str = "") -> str:
+        explicit = (description or "").strip()
+        if explicit:
+            return explicit
+        configured = (os.environ.get("XENDIT_DESCRIPTOR") or getattr(settings, "xendit_descriptor", "") or "Click Store").strip()
+        return configured or "Click Store"
+
     async def create_invoice(self, amount: float, external_id: str = "", payer_email: str = "", description: str = "") -> Dict[str, Any]:
         if not external_id:
             external_id = f"xendit-inv-{uuid.uuid4().hex[:12]}"
@@ -38,7 +45,7 @@ class XenditService:
             "external_id": external_id,
             "amount": int(round(amount)),
             "payer_email": payer_email,
-            "description": description or "Invoice",
+            "description": self._resolve_descriptor(description),
         }
         try:
             async with httpx.AsyncClient() as client:
@@ -90,7 +97,7 @@ class XenditService:
             "external_id": external_id,
             "type": "dynamic_qr",
             "amount": int(round(amount)),
-            "description": description or "QR Payment",
+            "description": self._resolve_descriptor(description),
         }
         try:
             async with httpx.AsyncClient() as client:

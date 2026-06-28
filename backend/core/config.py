@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     xendit_webhook_token: str = ""
     xendit_callback_url: str = ""
     xendit_base_url: str = ""
+    xendit_descriptor: str = "Click Store"
 
     # Maya Manager Checkout API
     maya_secret_key: str = ""
