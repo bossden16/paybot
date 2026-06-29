@@ -44,9 +44,11 @@ class XenditService:
         payload = {
             "external_id": external_id,
             "amount": int(round(amount)),
-            "payer_email": payer_email,
             "description": self._resolve_descriptor(description),
         }
+        # Only include payer_email if it's not empty (Xendit rejects empty emails)
+        if payer_email and payer_email.strip():
+            payload["payer_email"] = payer_email.strip()
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.post(f"{self.base_url}/v2/invoices", json=payload, auth=self._auth(), timeout=30.0)
