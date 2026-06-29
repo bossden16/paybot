@@ -70,9 +70,10 @@ export default function CreatePayment() {
         method: 'POST',
         data: payload,
       });
+      const responseData = res.data?.data ?? res.data;
 
       if (res.data?.success) {
-        setResult(res.data.data);
+        setResult(responseData);
         toast.success(res.data.message || 'Payment created successfully!');
       } else {
         toast.error(res.data?.message || 'Failed to create payment');
@@ -235,44 +236,45 @@ export default function CreatePayment() {
                     <span className="font-medium">Payment Created!</span>
                   </div>
 
-                  {Object.entries(result).map(([key, value]) => {
-                    if (!value) return null;
-                    const isUrl = typeof value === 'string' && (value.startsWith('http') || value.startsWith('https'));
-                    return (
-                      <div key={key} className="space-y-1">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-                          {key.replace(/_/g, ' ')}
-                        </Label>
-                        <div className="flex items-center space-x-2">
-                          {isUrl ? (
-                            <a
-                              href={value as string}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-400 hover:text-blue-300 underline break-all flex-1"
+                  {Object.entries(result)
+                    .filter(([key, value]) => value != null && key !== 'success' && key !== 'message')
+                    .map(([key, value]) => {
+                      const isUrl = typeof value === 'string' && (value.startsWith('http') || value.startsWith('https'));
+                      return (
+                        <div key={key} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+                            {key.replace(/_/g, ' ')}
+                          </Label>
+                          <div className="flex items-center space-x-2">
+                            {isUrl ? (
+                              <a
+                                href={value as string}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-400 hover:text-blue-300 underline break-all flex-1"
+                              >
+                                {value as string}
+                              </a>
+                            ) : (
+                              <code className="text-sm text-foreground font-mono bg-muted px-2 py-1 rounded break-all flex-1">
+                                {String(value)}
+                              </code>
+                            )}
+                            <button
+                              onClick={() => copyToClipboard(String(value))}
+                              className="text-muted-foreground hover:text-foreground flex-shrink-0"
                             >
-                              {value as string}
-                            </a>
-                          ) : (
-                            <code className="text-sm text-foreground font-mono bg-muted px-2 py-1 rounded break-all flex-1">
-                              {String(value)}
-                            </code>
-                          )}
-                          <button
-                            onClick={() => copyToClipboard(String(value))}
-                            className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          {isUrl && (
-                            <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex-shrink-0">
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                          )}
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            {isUrl && (
+                              <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               )}
             </CardContent>

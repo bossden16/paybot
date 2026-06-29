@@ -74,12 +74,12 @@ const USDT_PLATFORMS: { code: string; name: string }[] = [
   { code: 'other', name: 'Other / Custom' },
 ];
 
-const DEPOSIT_CHANNELS = [
-  { value: 'Security Bank Corporation', label: 'Security Bank' },
-  { value: 'Asia United Bank', label: 'Asia United Bank' },
-  { value: 'GCash', label: 'GCash' },
-  { value: 'Maya', label: 'Maya' },
+const DEPOSIT_DESTINATIONS = [
+  { value: 'Security Bank Corporation', label: 'Security Bank', account_number: '0000068888173', account_name: 'Xendit Philippines Inc' },
+  { value: 'Asia United Bank', label: 'Asia United Bank', account_number: '934105321485', account_name: 'Xendit Philippines Inc' },
 ];
+
+const DEPOSIT_CHANNELS = DEPOSIT_DESTINATIONS.map(dest => ({ value: dest.value, label: dest.label }));
 
 const TOPUP_METHODS = [
   { value: 'same_bank', label: 'Same-bank transfer' },
@@ -93,6 +93,8 @@ const FUND_WALLET_METHODS = [
   { value: 'bank_transfer', label: 'Bank Transfer', description: 'Transfer funds directly from a Philippine bank into the Xendit account.' },
   { value: 'ubp_bills_payment', label: 'UBP Bills Payment', description: 'Use UnionBank Bills Payment and enter your Xendit payment code to top up.' },
 ];
+
+const FUND_WALLET_STEP_TITLES = ['Choose method', 'Top up details', 'Confirm top up', 'Submit proof'];
 
 const txnMeta: Record<string, { label: string; color: string; icon: React.ReactNode; sign: string }> = {
   deposit:       { label: 'Deposit', color: 'text-emerald-600', icon: <ArrowDownToLine className="h-4 w-4" />, sign: '+' },
@@ -131,12 +133,15 @@ export default function WalletPage() {
 
   // PHP Deposit Request form state
   const [depositAmount, setDepositAmount] = useState('');
-  const [depositChannel, setDepositChannel] = useState('BDO');
-  const [depositAccount, setDepositAccount] = useState('');
+  const [depositChannel, setDepositChannel] = useState('Security Bank Corporation');
   const [depositMethod, setDepositMethod] = useState('same_bank');
-  const [depositRef, setDepositRef] = useState('');
+  const [depositRefNumber, setDepositRefNumber] = useState('');
+  const [depositNotes, setDepositNotes] = useState('');
+  const [depositReceipt, setDepositReceipt] = useState<File | null>(null);
+  const [depositDate, setDepositDate] = useState('');
   const [depositLoading, setDepositLoading] = useState(false);
-  const [fundMethod, setFundMethod] = useState<'bank_transfer' | 'ubp_bills_payment'>('ubp_bills_payment');
+  const [fundMethod, setFundMethod] = useState<'bank_transfer' | 'ubp_bills_payment'>('bank_transfer');
+  const [fundWizardStep, setFundWizardStep] = useState(1);
 
   // PHP Bank Withdraw Request form state
   const [wrAmount, setWrAmount] = useState('');
@@ -202,28 +207,40 @@ export default function WalletPage() {
   const handlePhpDepositRequest = async () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount <= 0) { toast.error('Enter a valid deposit amount'); return; }
-    if (!depositChannel) { toast.error('Choose a funding channel'); return; }
-    if (!depositAccount.trim()) { toast.error('Enter your transfer account or reference'); return; }
+    if (!depositChannel) { toast.error('Choose a destination bank'); return; }
     if (!depositMethod.trim()) { toast.error('Select a transfer method'); return; }
+    if (!depositDate) { toast.error('Select the transfer date'); return; }
+    if (!depositRefNumber.trim()) { toast.error('Enter the reference number'); return; }
+    if (!depositReceipt) { toast.error('Upload proof of transaction'); return; }
 
     setDepositLoading(true);
     try {
+      const selectedDestination = DEPOSIT_DESTINATIONS.find(d => d.value === depositChannel);
+      const accountNumber = selectedDestination?.account_number || depositChannel;
       const formData = new FormData();
       formData.append('amount_php', amount.toString());
       formData.append('channel', depositChannel);
-      formData.append('account_number', depositAccount.trim());
+      formData.append('account_number', accountNumber);
       formData.append('transfer_method', depositMethod.trim());
-      if (depositRef.trim()) formData.append('ref_number', depositRef.trim());
+      formData.append('ref_number', depositRefNumber.trim());
+      formData.append('receipt', depositReceipt);
+      if (depositNotes.trim()) {
+        formData.append('note', depositNotes.trim());
+      }
+      formData.append('transfer_date', depositDate);
 
       const res = await fetch('/api/v1/bank-deposits', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.id) {
         toast.success('PHP deposit request submitted for review');
         setDepositAmount('');
-        setDepositChannel('BDO');
-        setDepositAccount('');
+        setDepositChannel('Security Bank Corporation');
         setDepositMethod('same_bank');
-        setDepositRef('');
+        setDepositRefNumber('');
+        setDepositNotes('');
+        setDepositReceipt(null);
+        setDepositDate('');
+        setFundWizardStep(1);
         await fetchData();
       } else {
         toast.error(data.detail || 'Failed to submit deposit request');
@@ -498,94 +515,231 @@ export default function WalletPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-[10px] font-medium text-slate-700">Amount (₱)</Label>
-                        <Input
-                          type="number"
-                          placeholder="1000"
-                          value={depositAmount}
-                          onChange={e => setDepositAmount(e.target.value)}
-                          min="1000"
-                          step="0.01"
-                          className="mt-1 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
-                        />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-2">
+                        {FUND_WALLET_STEP_TITLES.map((title, index) => {
+                          const step = index + 1;
+                          const active = step === fundWizardStep;
+                          return (
+                            <div key={title} className={`rounded-2xl border px-3 py-2 text-[11px] font-semibold ${active ? 'border-blue-600 bg-blue-50 text-slate-900' : 'border-slate-200 bg-white text-slate-500'}`}>
+                              <p className="text-[9px] uppercase tracking-[0.2em] text-slate-500">Step {step}</p>
+                              <p className="mt-1 leading-tight">{title}</p>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div>
-                        <Label className="text-[10px] font-medium text-slate-700">Destination</Label>
-                        <Select value={depositChannel} onValueChange={setDepositChannel}>
-                          <SelectTrigger className="mt-1 bg-white border-slate-200 text-slate-900">
-                            <SelectValue placeholder="Select destination" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-white border-slate-200">
-                            {bankList.map(bank => (
-                              <SelectItem key={bank.code} value={bank.code} className="text-slate-900">
-                                {bank.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-[10px] font-medium text-slate-700">Method</Label>
-                        <Select value={depositMethod} onValueChange={setDepositMethod}>
-                          <SelectTrigger className="mt-1 bg-white border-slate-200 text-slate-900">
-                            <SelectValue placeholder="Method" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-white border-slate-200">
-                            {TOPUP_METHODS.map(method => (
-                              <SelectItem key={method.value} value={method.value} className="text-slate-900">
-                                {method.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-medium text-slate-700">Sender / Reference</Label>
-                        <Input
-                          placeholder="Account or reference"
-                          value={depositAccount}
-                          onChange={e => setDepositAccount(e.target.value)}
-                          className="mt-1 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-[10px] font-medium text-slate-700">Ref #</Label>
-                      <Input
-                        placeholder="TRF-12345"
-                        value={depositRef}
-                        onChange={e => setDepositRef(e.target.value)}
-                        className="mt-1 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <Button variant="outline" onClick={() => {
-                        setDepositAmount('');
-                        setDepositChannel('BDO');
-                        setDepositAccount('');
-                        setDepositMethod('same_bank');
-                        setDepositRef('');
-                      }} className="w-full sm:w-auto h-8 px-3">
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handlePhpDepositRequest}
-                        disabled={depositLoading}
-                        className="w-full sm:w-auto h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white"
-                      >
-                        {depositLoading ? (
-                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submit</>
-                        ) : (
-                          <>Submit</>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        {fundWizardStep === 1 && (
+                          <div className="space-y-4">
+                            <p className="text-sm font-semibold text-slate-900">Choose how to top up</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {FUND_WALLET_METHODS.map(method => (
+                                <button
+                                  key={method.value}
+                                  type="button"
+                                  onClick={() => setFundMethod(method.value as 'bank_transfer' | 'ubp_bills_payment')}
+                                  className={`rounded-2xl border p-4 text-left transition ${fundMethod === method.value ? 'border-blue-600 bg-white shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-semibold text-slate-900">{method.label}</span>
+                                    <span className={`h-2.5 w-2.5 rounded-full ${fundMethod === method.value ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-2">{method.description}</p>
+                                </button>
+                              ))}
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-100 p-3">
+                              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Instructions</p>
+                              <div className="mt-3 space-y-1 text-sm text-slate-700">
+                                {fundMethod === 'bank_transfer' ? (
+                                  <>
+                                    <p>1. Log in to your bank app or portal.</p>
+                                    <p>2. Transfer to one of Xendit&apos;s bank accounts below.</p>
+                                    <p>3. Use the selected destination and method when you submit proof.</p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p>1. Log in to your UnionBank online banking.</p>
+                                    <p>2. Choose Bills Payment and select Xendit Balance Top-up.</p>
+                                    <p>3. Enter the amount and your payment code, then pay.</p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         )}
-                      </Button>
+
+                        {fundWizardStep === 2 && (
+                          <div className="space-y-4">
+                            <p className="text-sm font-semibold text-slate-900">Top up details</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-[10px] font-medium text-slate-700">Top Up Amount (₱)</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="1000"
+                                  value={depositAmount}
+                                  onChange={e => setDepositAmount(e.target.value)}
+                                  min="1000"
+                                  step="0.01"
+                                  className="mt-1 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-[10px] font-medium text-slate-700">Top Up To</Label>
+                                <Select value={depositChannel} onValueChange={setDepositChannel}>
+                                  <SelectTrigger className="mt-1 bg-white border-slate-200 text-slate-900">
+                                    <SelectValue placeholder="Select destination" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white border-slate-200">
+                                    {DEPOSIT_DESTINATIONS.map(dest => (
+                                      <SelectItem key={dest.value} value={dest.value} className="text-slate-900">
+                                        {dest.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <Label className="text-[10px] font-medium text-slate-700">Top Up Method</Label>
+                              <Select value={depositMethod} onValueChange={setDepositMethod}>
+                                <SelectTrigger className="mt-1 bg-white border-slate-200 text-slate-900">
+                                  <SelectValue placeholder="Select method" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-slate-200">
+                                  {TOPUP_METHODS.map(method => (
+                                    <SelectItem key={method.value} value={method.value} className="text-slate-900">
+                                      {method.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
+
+                        {fundWizardStep === 3 && (
+                          <div className="space-y-4">
+                            <p className="text-sm font-semibold text-slate-900">Confirm top up</p>
+                            <div className="grid grid-cols-1 gap-4 text-sm text-slate-700">
+                              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Destination</p>
+                                    <p className="mt-2 text-slate-900 font-semibold">{DEPOSIT_DESTINATIONS.find(d => d.value === depositChannel)?.label || depositChannel}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Top Up Method</p>
+                                    <p className="mt-2 text-slate-900 font-semibold">{TOPUP_METHODS.find(m => m.value === depositMethod)?.label || depositMethod}</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Account Number</p>
+                                    <p className="mt-2 text-slate-900 font-semibold">{DEPOSIT_DESTINATIONS.find(d => d.value === depositChannel)?.account_number || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Account Name</p>
+                                    <p className="mt-2 text-slate-900 font-semibold">{DEPOSIT_DESTINATIONS.find(d => d.value === depositChannel)?.account_name || 'Xendit Philippines Inc'}</p>
+                                  </div>
+                                </div>
+                                <div className="mt-4 grid grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Amount</p>
+                                    <p className="mt-2 text-slate-900 font-semibold">₱{depositAmount || '0.00'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Reference</p>
+                                    <p className="mt-2 text-slate-900 font-semibold">{depositRefNumber || 'Not set'}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {fundWizardStep === 4 && (
+                          <div className="space-y-4">
+                            <p className="text-sm font-semibold text-slate-900">Submit proof</p>
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-[10px] font-medium text-slate-700">Proof of transaction</Label>
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={e => setDepositReceipt(e.target.files?.[0] || null)}
+                                  className="mt-2 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                                />
+                                <p className="text-xs text-slate-500 mt-2">Upload screenshot or receipt from your transfer.</p>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="text-[10px] font-medium text-slate-700">Transfer Date</Label>
+                                  <Input
+                                    type="date"
+                                    value={depositDate}
+                                    onChange={e => setDepositDate(e.target.value)}
+                                    className="mt-1 bg-white border-slate-200 text-slate-900"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-[10px] font-medium text-slate-700">Reference Number</Label>
+                                  <Input
+                                    placeholder="TRF-12345"
+                                    value={depositRefNumber}
+                                    onChange={e => setDepositRefNumber(e.target.value)}
+                                    className="mt-1 bg-white border-slate-200 text-slate-900"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <Label className="text-[10px] font-medium text-slate-700">Notes</Label>
+                                <Input
+                                  placeholder="Optional notes for admin"
+                                  value={depositNotes}
+                                  onChange={e => setDepositNotes(e.target.value)}
+                                  className="mt-1 bg-white border-slate-200 text-slate-900"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        {fundWizardStep > 1 && (
+                          <Button
+                            variant="outline"
+                            onClick={() => setFundWizardStep(prev => Math.max(1, prev - 1))}
+                            className="h-10 rounded-lg"
+                          >
+                            Back
+                          </Button>
+                        )}
+                        {fundWizardStep < 4 ? (
+                          <Button
+                            onClick={() => setFundWizardStep(prev => Math.min(4, prev + 1))}
+                            className="h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white"
+                          >
+                            Continue
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={handlePhpDepositRequest}
+                            disabled={depositLoading}
+                            className="h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white"
+                          >
+                            {depositLoading ? (
+                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submit</>
+                            ) : (
+                              <>Submit</>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>

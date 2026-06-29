@@ -68,6 +68,8 @@ async def create_bank_deposit_request(
     account_number: str = Form(...),
     transfer_method: str = Form(...),
     ref_number: Optional[str] = Form(None),
+    transfer_date: Optional[str] = Form(None),
+    note: Optional[str] = Form(None),
     receipt: Optional[UploadFile] = File(None),
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -91,6 +93,10 @@ async def create_bank_deposit_request(
     note_parts = [f"Transfer method: {transfer_method}"]
     if ref_number:
         note_parts.append(f"Ref: {ref_number}")
+    if transfer_date:
+        note_parts.append(f"Transfer date: {transfer_date}")
+    if note:
+        note_parts.append(f"Notes: {note}")
     note_text = " | ".join(note_parts)
 
     req = BankDepositRequest(
