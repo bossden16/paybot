@@ -9,7 +9,8 @@ import {
   Home, LayoutDashboard, CreditCard, Send, FileText, BarChart3,
   Wallet, Settings, LogOut, Menu, User, ShieldCheck, Crown,
   ChevronRight, Zap, Bell, CheckCircle, XCircle, Clock, Bot,
-  MessageSquare, Users, CalendarDays, RotateCcw, ArrowUpFromLine
+  MessageSquare, Users, CalendarDays, RotateCcw, ArrowUpFromLine,
+  DollarSign, ClipboardList
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -28,6 +29,11 @@ const navItems = [
   { label: 'Schedules', icon: CalendarDays, path: '/schedules' },
   { label: 'Customers', icon: Users, path: '/customers' },
   { label: 'Bot Messages', icon: MessageSquare, path: '/bot-messages' },
+  { label: 'KYB Registrations', icon: ClipboardList, path: '/kyb-registrations', adminOnly: true },
+  { label: 'KYC Verifications', icon: ShieldCheck, path: '/kyc-verifications', adminOnly: true },
+  { label: 'Top-up Requests', icon: DollarSign, path: '/topup-requests', adminOnly: true },
+  { label: 'USDT Requests', icon: Send, path: '/usdt-send-requests', adminOnly: true },
+  { label: 'Bank Deposits', icon: ArrowUpFromLine, path: '/bank-deposits', adminOnly: true },
   { label: 'Bot Settings', icon: Bot, path: '/bot-settings', permission: 'can_manage_bot' },
   { label: 'Admin Management', icon: ShieldCheck, path: '/admin-management', adminOnly: true },
   { label: 'Settings', icon: Settings, path: '/settings' },
