@@ -50,6 +50,8 @@ PAYMENT_METHOD_ALIASES = {
     "paypal": "paypal",
     "gcash": "gcash",
     "grabpay": "grabpay",
+    "maya": "maya",
+    "paymaya": "maya",
     "alipay": "alipay",
     "wechat": "wechat_pay",
     "wechatpay": "wechat_pay",
@@ -86,6 +88,33 @@ async def get_supported_payment_methods():
         "success": True,
         "source": "magpie",
         "payment_methods": SUPPORTED_PAYMENT_METHODS,
+    }
+
+
+@router.get("/ping")
+async def ping_magpie(
+    current_user: UserResponse = Depends(get_payment_user("payments:read")),
+):
+    """Check Magpie connectivity and API key validity."""
+    from core.config import settings
+    service = MagpieService()
+    api_key_configured = bool(service.api_key)
+    base_url = service.base_url
+
+    if not api_key_configured:
+        return {
+            "success": False,
+            "configured": False,
+            "base_url": base_url,
+            "error": "MAGPIE_API_KEY is not set",
+        }
+
+    result = await service.get_balance()
+    return {
+        "success": result.get("success", False),
+        "configured": True,
+        "base_url": base_url,
+        "error": result.get("error") if not result.get("success") else None,
     }
 
 
@@ -163,24 +192,29 @@ async def _create_checkout_transaction(
     if not result.get("success"):
         return {"success": False, "message": result.get("error", "Failed to create payment")}
 
-    txn_service = TransactionsService(db)
-    txn = await txn_service.create_transaction(
-        user_id=str(current_user.id),
-        transaction_type=transaction_type,
-        amount=request.amount,
-        external_id=result.get("external_id", external_id),
-        gateway_id=result.get("checkout_id", "") or result.get("qr_id", ""),
-        description=request.description,
-        customer_name=request.customer_name,
-        customer_email=request.customer_email,
-        payment_url=result.get("checkout_url", "") or result.get("redirect_url", "") or result.get("qr_content", ""),
-    )
+    txn_id = None
+    try:
+        txn_service = TransactionsService(db)
+        txn = await txn_service.create_transaction(
+            user_id=str(current_user.id),
+            transaction_type=transaction_type,
+            amount=request.amount,
+            external_id=result.get("external_id", external_id),
+            gateway_id=result.get("checkout_id", "") or result.get("qr_id", ""),
+            description=request.description,
+            customer_name=request.customer_name,
+            customer_email=request.customer_email,
+            payment_url=result.get("checkout_url", "") or result.get("redirect_url", "") or result.get("qr_content", ""),
+        )
+        txn_id = txn.id
+    except Exception as exc:
+        logger.error("Failed to record transaction after Magpie success: %s", exc, exc_info=True)
 
     return {
         "success": True,
         "message": f"magpie {transaction_type.replace('_', ' ')} created",
         "data": {
-            "transaction_id": txn.id,
+            "transaction_id": txn_id,
             "external_id": result.get("external_id", external_id),
             "checkout_id": result.get("checkout_id", ""),
             "invoice_id": result.get("checkout_id", ""),

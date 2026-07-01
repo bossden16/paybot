@@ -253,7 +253,7 @@ async def disable_removed_gateway_apis(request: Request, call_next):
     if request.url.path.startswith("/api/v1/gateway"):
         return JSONResponse(
             status_code=status.HTTP_410_GONE,
-            content={"detail": "Gateway APIs are removed. Use /api/v1/magpie payment endpoints."},
+            content={"detail": "Gateway APIs are removed. Use /api/v1/xend/ payment endpoints."},
         )
     return await call_next(request)
 
