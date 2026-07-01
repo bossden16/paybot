@@ -167,17 +167,9 @@ async def lifespan(app: FastAPI):
             "invalidated on restart. Set JWT_SECRET_KEY for production use."
         )
 
-    # Maya Manager is the primary payment gateway - enforce in production.
-    if not settings.maya_secret_key:
-        message = "MAYA_SECRET_KEY is not configured. Maya-based payment features require this credential."
-        if environment == "dev":
-            logger.warning(message)
-        else:
-            logger.critical(message)
-            sys.exit(1)
-
-    if not settings.maya_business_api_key or not settings.maya_business_secret_key:
-        message = "MAYA_BUSINESS_API_KEY and/or MAYA_BUSINESS_SECRET_KEY are not configured. Maya Business payments require these credentials."
+    # Magpie is the primary payment gateway - enforce in production.
+    if not settings.magpie_api_key:
+        message = "MAGPIE_API_KEY is not configured. Magpie-based payment features require this credential."
         if environment == "dev":
             logger.warning(message)
         else:
@@ -253,6 +245,17 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def disable_removed_gateway_apis(request: Request, call_next):
+    """Block removed gateway surface while preserving magpie/xend endpoints."""
+    if request.url.path.startswith("/api/v1/gateway"):
+        return JSONResponse(
+            status_code=status.HTTP_410_GONE,
+            content={"detail": "Gateway APIs are removed. Use /api/v1/magpie payment endpoints."},
+        )
+    return await call_next(request)
 
 
 # MODULE_MIDDLEWARE_START
@@ -437,7 +440,7 @@ async def grid_telemetry(db: AsyncSession = Depends(get_db)):
         total_pending = float(row[1] or 0.0)
 
         return {
-            "node": "mayaproduction-mainnet",
+            "node": "magpieproduction-mainnet",
             "uptime": int(asyncio.get_event_loop().time()),
             "grid_status": "OPERATIONAL",
             "telemetry": {

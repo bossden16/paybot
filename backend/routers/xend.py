@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from dependencies.auth import get_payment_user
 from schemas.auth import UserResponse
-from services.maya_service import MayaService
+from services.magpie_service import MagpieService
 from services.transactions import TransactionsService
 
 logger = logging.getLogger(__name__)
@@ -50,8 +50,6 @@ XEND_PAYMENT_METHOD_ALIASES = {
     "paypal": "paypal",
     "gcash": "gcash",
     "grabpay": "grabpay",
-    "maya": "maya",
-    "paymaya": "maya",
     "alipay": "alipay",
     "wechat": "wechat_pay",
     "wechatpay": "wechat_pay",
@@ -86,7 +84,7 @@ def _normalize_payment_methods(methods: List[str]) -> tuple[List[str], List[str]
 async def get_supported_payment_methods():
     return {
         "success": True,
-        "source": "https://xend.apidocumentation.com/xend-platform/payments/payment-methods",
+        "source": "magpie",
         "payment_methods": XEND_SUPPORTED_PAYMENT_METHODS,
     }
 
@@ -120,11 +118,11 @@ async def _create_checkout_transaction(
             detail=f"Unsupported payment method(s): {', '.join(invalid_methods)}. Supported: {', '.join(XEND_SUPPORTED_PAYMENT_METHODS)}",
         )
 
-    service = MayaService()
+    service = MagpieService()
     external_id = request.external_id or f"{external_prefix}-{uuid.uuid4().hex[:12]}"
     merchant_name = (request.merchant_name or "").strip()
     descriptor = (request.descriptor or "").strip().upper()[:22]
-    base_description = (request.description or "").strip() or "xend payment"
+    base_description = (request.description or "").strip() or "magpie payment"
 
     # Keep the user description intact while injecting descriptor/merchant context
     # so checkout pages and records visibly reflect these settings.
@@ -138,7 +136,7 @@ async def _create_checkout_transaction(
         "payment_methods": payment_methods,
         "merchant_name": merchant_name,
         "descriptor": descriptor,
-        "source": "xend",
+        "source": "magpie",
     }
 
     if use_qr:
@@ -180,7 +178,7 @@ async def _create_checkout_transaction(
 
     return {
         "success": True,
-        "message": f"xend {transaction_type.replace('_', ' ')} created",
+        "message": f"magpie {transaction_type.replace('_', ' ')} created",
         "data": {
             "transaction_id": txn.id,
             "external_id": result.get("external_id", external_id),
@@ -197,7 +195,7 @@ async def _create_checkout_transaction(
             "merchant_name": merchant_name,
             "descriptor": descriptor,
             "applied_description": checkout_desc,
-            "gateway": "xend",
+            "gateway": "magpie",
         },
     }
 

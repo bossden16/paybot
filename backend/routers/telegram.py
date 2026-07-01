@@ -25,9 +25,8 @@ from models.refunds import Refunds
 from models.subscriptions import Subscriptions
 from schemas.auth import UserResponse
 from services.telegram_service import TelegramService, _resolve_bot_token, t as _t, user_lang as _user_lang
-from services.maya_service import MayaService
+from services.magpie_service import MagpieService
 from services.event_bus import payment_event_bus
-from services.paymongo_service import PayMongoService
 from services.photonpay_service import PhotonPayService
 from services.bot_settings import Bot_settingsService
 from services.pos_terminal import POSTerminalService
@@ -213,12 +212,12 @@ async def _compute_usd_balance_for_wallet(db: AsyncSession, user_id: str) -> flo
 
 
 async def _get_php_balance_for_bot(db: AsyncSession, tg_user_id: str) -> float:
-    """Return the live PayMongo PHP balance, falling back to the stored wallet row.
+    """Return the live Magpie PHP balance, falling back to the stored wallet row.
 
     Returns 0.0 if neither source is available so the caller can decide.
     """
     try:
-        pm_svc = PayMongoService()
+        pm_svc = MagpieService()
         result = await pm_svc.get_balance()
         if result.get("success"):
             available = result.get("available", [])
@@ -226,7 +225,7 @@ async def _get_php_balance_for_bot(db: AsyncSession, tg_user_id: str) -> float:
             if php_entry is not None:
                 return float(php_entry["amount"]) / 100.0
     except Exception as e:
-        logger.warning("PayMongo balance fetch failed in PHP threshold check: %s", e)
+        logger.warning("Magpie balance fetch failed in PHP threshold check: %s", e)
 
     # Fallback: stored PHP wallet row
     try:
@@ -1022,61 +1021,30 @@ async def _process_withdrawal_request(
     amount: float,
     cmd_label: str = "Withdrawal"
 ) -> None:
-    """Process a withdrawal / disbursement request with balance check and ledger entry."""
+    """Process a withdrawal / disbursement request via WalletsService policy checks."""
     if amount <= 0:
         await tg.send_message(chat_id, "❌ Amount must be positive.")
         return
 
     from services.wallets import WalletsService
     wallet_svc = WalletsService(db)
-    wallet = await wallet_svc.get_or_create_wallet(chat_id, "PHP", lock=True)
-    user_wallet_id = wallet.user_id
-
-    if wallet.balance < amount:
-        await tg.send_message(chat_id, f"❌ Insufficient balance: ₱{wallet.balance:,.2f}")
+    try:
+        result = await wallet_svc.withdraw_request(
+            user_id=chat_id,
+            amount=amount,
+            bank_name=bank.upper(),
+            account_number=account,
+            account_name=name,
+            note=f"{cmd_label} request via Telegram",
+        )
+    except ValueError as exc:
+        await tg.send_message(chat_id, f"❌ {str(exc)}")
         return
 
-    now = datetime.now(timezone.utc)
-    ext_id = f"wd-{uuid.uuid4().hex[:12]}"
-    disb = Disbursements(
-        user_id=user_wallet_id,
-        external_id=ext_id,
-        amount=amount,
-        currency="PHP",
-        bank_code=bank.upper(),
-        account_number=account,
-        account_name=name,
-        description=f"{cmd_label} request via Telegram",
-        status="pending",
-        disbursement_type="single",
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(disb)
-
-    balance_before = wallet.balance
-    wallet.balance = round(wallet.balance - amount, 2)
-    
-    # Also update available_balance for consistency
-    if hasattr(wallet, 'available_balance'):
-        wallet.available_balance = round((wallet.available_balance or 0.0) - amount, 2)
-
-    wallet.updated_at = now
-
-    wtxn = Wallet_transactions(
-        user_id=user_wallet_id,
-        wallet_id=wallet.id,
-        transaction_type="withdraw",
-        amount=-amount,
-        balance_before=balance_before,
-        balance_after=wallet.balance,
-        note=f"{cmd_label} request: {bank} {account} (#{ext_id})",
-        status="pending",
-        reference_id=ext_id,
-        created_at=now,
-    )
-    db.add(wtxn)
-    await db.commit()
+    ext_id = result.get("reference_id", "")
+    user_wallet_id = str(chat_id)
+    new_balance = float(result.get("balance", 0.0))
+    txn_id = int(result.get("transaction_id", 0))
 
     await tg.send_chat_action(chat_id, "typing")
     msg = _t(chat_id,
@@ -1087,7 +1055,7 @@ async def _process_withdrawal_request(
         f"🔢 Account: <code>{account}</code>\n"
         f"👤 Name: {name}\n"
         f"🆔 Ref: <code>{ext_id}</code>\n\n"
-        f"⏳ The bank will now validating your {cmd_label.lower()}, please wait for your balance credited to your bank patiently",
+        f"⏳ Please wait for the bank to validate the transfer process",
         f"✅ <b>{cmd_label} 申请已接收</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 金额: <b>₱{amount:,.2f}</b>\n"
@@ -1095,7 +1063,7 @@ async def _process_withdrawal_request(
         f"🔢 账号: <code>{account}</code>\n"
         f"👤 姓名: {name}\n"
         f"🆔 参考: <code>{ext_id}</code>\n\n"
-        f"⏳ 银行正在验证您的提款，请耐心等待余额存入您的银行。"
+        f"⏳ 请等待银行验证转账流程。"
     )
     await tg.send_message(chat_id, msg)
 
@@ -1117,12 +1085,12 @@ async def _process_withdrawal_request(
     payment_event_bus.publish({
         "event_type": "wallet_update",
         "user_id": user_wallet_id,
-        "wallet_id": wallet.id,
-        "balance": wallet.balance,
+        "wallet_id": None,
+        "balance": new_balance,
         "currency": "PHP",
         "transaction_type": "withdraw",
         "amount": amount,
-        "transaction_id": wtxn.id,
+        "transaction_id": txn_id,
         "note": f"{cmd_label} requested to {bank}",
         "skip_bot_notify": True
     })
@@ -2121,7 +2089,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
                     description = parts[2] if len(parts) > 2 else "Invoice payment"
-                    maya = MayaService()
+                    maya = MagpieService()
                     result = await maya.create_invoice(amount=amount, description=description)
                     if result.get("success"):
                         invoice_url = result.get('invoice_url', '')
@@ -2178,7 +2146,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
                     description = parts[2] if len(parts) > 2 else "QR payment"
-                    maya_svc = MayaService()
+                    maya_svc = MagpieService()
                     ext_id = f"qr-{uuid.uuid4().hex[:8]}"
                     result = await maya_svc.create_qr_payment(amount=amount, external_id=ext_id, description=description, payment_methods=["qrph"])
                     if result.get("success"):
@@ -2285,13 +2253,13 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                             logger.warning(f"PhotonPay Alipay failed: {result.get('error', 'Unknown error')} — trying Xendit fallback")
                             use_xendit_fallback = True
                     else:
-                        # Fallback: use Maya
-                        maya = MayaService()
-                        if not maya.secret_key:
+                        # Fallback: use Magpie
+                        maya = MagpieService()
+                        if not maya.api_key:
                             await tg.send_message(
                                 chat_id,
                                 "❌ <b>Alipay payments are not available at this time.</b>\n\n"
-                                "Neither PhotonPay nor Maya is configured.",
+                                "Neither PhotonPay nor Magpie is configured.",
                             )
                             await _safe_log(db, chat_id, username, text)
                             return {"status": "ok"}
@@ -2424,7 +2392,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
                     description = parts[2] if len(parts) > 2 else "Payment link"
-                    xendit = MayaService()
+                    xendit = MagpieService()
                     result = await xendit.create_payment_link(amount=amount, description=description)
                     if result.get("success"):
                         link_url = result.get('payment_link_url', '')
@@ -2502,7 +2470,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         "MAYA": "PH_MAYA", "PAYMAYA": "PH_MAYA", "PH_MAYA": "PH_MAYA",
                     }
                     channel = channel_map.get(provider, f"PH_{provider}")
-                    maya = MayaService()
+                    maya = MagpieService()
                     result = await maya.create_ewallet_charge(amount=amount, channel_code=channel)
                     if result.get("success"):
                         checkout = result.get("checkout_url", "")
@@ -2604,7 +2572,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                     elif refund_amount > txn.amount:
                         await tg.send_message(chat_id, "❌ Refund amount exceeds transaction amount.")
                     else:
-                        xendit = MayaService()
+                        xendit = MagpieService()
                         ref_result = await xendit.create_refund(invoice_id=txn.xendit_id, amount=refund_amount)
                         ref_type = "full" if refund_amount >= txn.amount else "partial"
                         if ref_result.get("success"):
@@ -3377,7 +3345,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 try:
                     amount = float(parts[1])
                     method = parts[2].lower()
-                    xendit = MayaService()
+                    xendit = MagpieService()
                     fees = xendit.calculate_fees(amount, method)
                     reply = (
                         f"💱 <b>Fee Calculation</b>\n\n💰 Amount: ₱{amount:,.2f}\n📋 Method: {method}\n"

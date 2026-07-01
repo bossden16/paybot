@@ -237,7 +237,7 @@ async def initialize_admin_user():
                 user_id=admin_user_id,
                 status=TerminalStatus.ACTIVE,
                 is_active=True,
-                enabled_payment_methods=["maya", "card", "gcash", "grabpay"],
+                enabled_payment_methods=["magpie", "card", "gcash", "grabpay"],
                 assigned_at=datetime.utcnow()
             )
             db.add(test_terminal)

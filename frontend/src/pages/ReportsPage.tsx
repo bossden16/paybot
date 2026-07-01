@@ -43,7 +43,6 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState('monthly');
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [paymongoBalance, setPaymongoBalance] = useState<number | null>(null);
 
   // Fee calculator
   const [feeAmount, setFeeAmount] = useState('');
@@ -59,10 +58,6 @@ export default function ReportsPage() {
       setReport(rptRes.data);
     } catch { /* ignore */ }
     setLoading(false);
-    try {
-      const balRes = await client.apiCall.invoke({ url: '/api/v1/gateway/paymongo-balance', method: 'GET', data: {} });
-      if (balRes.data?.success) setPaymongoBalance(balRes.data.balance);
-    } catch { /* ignore */ }
   }, [user, period]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
@@ -217,9 +212,9 @@ export default function ReportsPage() {
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">PHP Balance</p>
+                      <p className="text-sm text-muted-foreground">Gateway Balance</p>
                       <p className="text-3xl font-bold text-foreground mt-1">
-                        {paymongoBalance !== null ? fmt(paymongoBalance) : 'N/A'}
+                        N/A
                       </p>
                     </div>
                     <div className="h-10 w-10 bg-purple-500/20 rounded-xl flex items-center justify-center">

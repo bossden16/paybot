@@ -867,10 +867,10 @@ class TestUsdtQrImage:
 
 
 # ---------------------------------------------------------------------------
-# Maya Top-Up integration
+# Magpie Top-Up integration
 # ---------------------------------------------------------------------------
-class TestMayaTopUpIntegration:
-    """Verify Maya wallet top-up creates checkout-based invoices correctly."""
+class TestMagpieTopUpIntegration:
+    """Verify Magpie wallet top-up creates checkout-based invoices correctly."""
 
     def test_topup_uses_checkout_fields(self, client, auth_headers):
         mock_result = {
@@ -883,7 +883,7 @@ class TestMayaTopUpIntegration:
         async def fake_create_invoice(*args, **kwargs):
             return mock_result
 
-        with patch("routers.wallet.MayaService.create_invoice", new=fake_create_invoice):
+        with patch("routers.wallet.MagpieService.create_invoice", new=fake_create_invoice):
             r = client.post(
                 "/api/v1/wallet/topup",
                 headers=auth_headers,
@@ -904,11 +904,11 @@ class TestMayaTopUpIntegration:
 
 
 class TestXenditCollectionFallback:
-    def test_create_invoice_falls_back_to_maya_when_xendit_fails(self, client, auth_headers):
+    def test_create_invoice_falls_back_to_magpie_when_xendit_fails(self, client, auth_headers):
         async def fake_xendit_create_invoice(*args, **kwargs):
             return {"success": False, "error": "xendit bad request"}
 
-        async def fake_maya_create_checkout(*args, **kwargs):
+        async def fake_magpie_create_checkout(*args, **kwargs):
             return {
                 "success": True,
                 "checkout_id": "maya-checkout-456",
@@ -917,7 +917,7 @@ class TestXenditCollectionFallback:
             }
 
         with patch("routers.xendit.XenditService.create_invoice", new=fake_xendit_create_invoice), patch(
-            "services.maya_service.MayaService.create_checkout", new=fake_maya_create_checkout
+            "services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout
         ):
             r = client.post(
                 "/api/v1/xendit/create-invoice",
@@ -941,12 +941,12 @@ class TestxendDescriptorMerchantPropagation:
     def test_create_invoice_forwards_descriptor_and_merchant_name(self, client, auth_headers):
         captured: dict = {}
 
-        async def fake_maya_create_checkout(self, *args, **kwargs):
+        async def fake_magpie_create_checkout(self, *args, **kwargs):
             captured.update(kwargs)
             return {
                 "success": True,
                 "checkout_id": "xend-checkout-123",
-                "checkout_url": "https://maya.example.com/checkout/xend-123",
+                "checkout_url": "https://api.magpie.im/checkout/xend-123",
                 "external_id": kwargs.get("external_id", "xend-external-123"),
             }
 
@@ -955,7 +955,7 @@ class TestxendDescriptorMerchantPropagation:
 
             return SimpleNamespace(id=999)
 
-        with patch("services.maya_service.MayaService.create_checkout", new=fake_maya_create_checkout), patch(
+        with patch("services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout), patch(
             "routers.xend.TransactionsService.create_transaction", new=fake_create_transaction
         ):
             r = client.post(
@@ -976,7 +976,7 @@ class TestxendDescriptorMerchantPropagation:
         body = r.json()
         assert body["success"] is True
 
-        # Regression check: ensure new fields are propagated to Maya checkout payload.
+        # Regression check: ensure new fields are propagated to Magpie checkout payload.
         assert captured.get("descriptor") == "CLICK STORE PH"
         assert captured.get("merchant_name") == "Click Store"
         assert captured.get("metadata", {}).get("descriptor") == "CLICK STORE PH"
@@ -986,12 +986,12 @@ class TestxendDescriptorMerchantPropagation:
     def test_legacy_magpie_create_invoice_route_still_works(self, client, auth_headers):
         captured: dict = {}
 
-        async def fake_maya_create_checkout(self, *args, **kwargs):
+        async def fake_magpie_create_checkout(self, *args, **kwargs):
             captured.update(kwargs)
             return {
                 "success": True,
                 "checkout_id": "legacy-magpie-checkout-123",
-                "checkout_url": "https://maya.example.com/checkout/legacy-123",
+                "checkout_url": "https://api.magpie.im/checkout/legacy-123",
                 "external_id": kwargs.get("external_id", "legacy-magpie-external-123"),
             }
 
@@ -1000,7 +1000,7 @@ class TestxendDescriptorMerchantPropagation:
 
             return SimpleNamespace(id=1001)
 
-        with patch("services.maya_service.MayaService.create_checkout", new=fake_maya_create_checkout), patch(
+        with patch("services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout), patch(
             "routers.xend.TransactionsService.create_transaction", new=fake_create_transaction
         ):
             r = client.post(
@@ -1013,14 +1013,14 @@ class TestxendDescriptorMerchantPropagation:
                     "merchant_name": "Legacy Store",
                     "customer_name": "Jane Doe",
                     "customer_email": "jane@example.com",
-                    "payment_methods": ["maya"],
+                    "payment_methods": ["gcash"],
                 },
             )
 
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["success"] is True
-        assert body["data"]["gateway"] == "xend"
+        assert body["data"]["gateway"] == "magpie"
 
         # Backward-compatible route should still propagate descriptor/merchant details.
         assert captured.get("descriptor") == "LEGACY SHOP"
@@ -1057,12 +1057,12 @@ class TestPaymentApiKeyAuth:
 
         captured: dict = {}
 
-        async def fake_maya_create_checkout(self, *args, **kwargs):
+        async def fake_magpie_create_checkout(self, *args, **kwargs):
             captured.update(kwargs)
             return {
                 "success": True,
                 "checkout_id": "api-key-checkout-123",
-                "checkout_url": "https://maya.example.com/checkout/apikey-123",
+                "checkout_url": "https://api.magpie.im/checkout/apikey-123",
                 "external_id": kwargs.get("external_id", "api-key-ext-123"),
             }
 
@@ -1071,7 +1071,7 @@ class TestPaymentApiKeyAuth:
 
             return SimpleNamespace(id=2001)
 
-        with patch("services.maya_service.MayaService.create_checkout", new=fake_maya_create_checkout), patch(
+        with patch("services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout), patch(
             "routers.xend.TransactionsService.create_transaction", new=fake_create_transaction
         ):
             response = client.post(

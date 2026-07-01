@@ -53,9 +53,9 @@ async def deployment_status():
         "xendit": {
             "configured": bool(settings.xendit_secret_key),
         },
-        "paymongo": {
-            "configured": bool(settings.paymongo_secret_key),
-            "mode": settings.paymongo_mode,
+        "magpie": {
+            "configured": bool(settings.magpie_api_key),
+            "mode": settings.magpie_mode,
         },
         "photonpay": {
             "configured": bool(

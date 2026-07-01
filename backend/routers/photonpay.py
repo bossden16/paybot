@@ -39,6 +39,7 @@ from models.wallets import Wallets
 from schemas.auth import UserResponse
 from services.event_bus import payment_event_bus
 from services.photonpay_service import PhotonPayService
+from services.transactions import PAYMENT_CREDIT_FEE_RATE
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +72,8 @@ async def _credit_wallet(
     amount: float,
     reference_id: str,
     pay_method: str,
-) -> None:
-    """Credit the PHP wallet for a paid PhotonPay transaction."""
+) -> float:
+    """Credit the PHP wallet for a paid PhotonPay transaction (0.5% fee deducted)."""
     result = await db.execute(
         select(Wallets).where(Wallets.user_id == user_id, Wallets.currency == "PHP")
     )
@@ -83,25 +84,39 @@ async def _credit_wallet(
         db.add(wallet)
         await db.flush()
 
+    gross_amount = float(amount or 0.0)
+    fee_amount = round(gross_amount * PAYMENT_CREDIT_FEE_RATE, 2)
+    net_amount = max(round(gross_amount - fee_amount, 2), 0.0)
+
     balance_before = float(wallet.balance or 0)
-    wallet.balance = balance_before + amount
+    wallet.balance = balance_before + net_amount
     wallet.updated_at = datetime.now(timezone.utc)
 
     ledger = Wallet_transactions(
         user_id=user_id,
         wallet_id=wallet.id,
         transaction_type="receive", # Standardize on 'receive'
-        amount=amount,
+        amount=net_amount,
         balance_before=balance_before,
         balance_after=wallet.balance,
         status="completed",
         reference_id=reference_id,
-        note=f"PhotonPay {pay_method} payment",
+        note=(
+            f"PhotonPay {pay_method} payment credited "
+            f"(gross={gross_amount:,.2f}, fee={fee_amount:,.2f}, net={net_amount:,.2f})"
+        ),
         created_at=datetime.now(timezone.utc),
     )
     db.add(ledger)
     await db.commit()
-    logger.info("Wallet credited +%s PHP for user=%s via PhotonPay (%s)", amount, user_id, pay_method)
+    logger.info(
+        "Wallet credited +%s PHP net (gross=%s fee=%s) for user=%s via PhotonPay (%s)",
+        net_amount,
+        gross_amount,
+        fee_amount,
+        user_id,
+        pay_method,
+    )
 
     try:
         payment_event_bus.publish({
@@ -111,13 +126,15 @@ async def _credit_wallet(
             "balance": wallet.balance,
             "currency": "PHP",
             "transaction_type": "receive",
-            "amount": amount,
+            "amount": net_amount,
             "transaction_id": ledger.id,
-            "note": f"PhotonPay {pay_method} payment",
+            "note": f"PhotonPay {pay_method} payment (net)",
             "skip_bot_notify": True # We have custom notification in webhook
         })
     except Exception:
         pass
+
+    return net_amount
 
 
 # ---------- Routes ----------
@@ -356,7 +373,7 @@ async def photonpay_webhook(
 
         # Credit the wallet
         credit_amount = float(txn.amount) if txn.amount else amount
-        await _credit_wallet(
+        net_amount = await _credit_wallet(
             db,
             user_id=txn.user_id,
             amount=credit_amount,
@@ -373,7 +390,8 @@ async def photonpay_webhook(
                     txn.telegram_chat_id,
                     f"✅ <b>Payment received!</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"💰 <b>+₱{credit_amount:,.2f} PHP</b> credited to your wallet\n"
+                    f"💰 <b>+₱{net_amount:,.2f} PHP</b> credited to your wallet\n"
+                    f"🧾 Fee deducted: <b>₱{(credit_amount - net_amount):,.2f}</b> (0.5%)\n"
                     f"💳 via {pay_method}\n"
                     f"🆔 <code>{req_id}</code>",
                 )

@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TeamInvitationsTab, TeamMembersTab } from '@/components/TeamManagement';
-import { getRoleDisplayName } from '@/lib/roleDisplay';
 import {
   ShieldCheck,
   Plus,
@@ -49,7 +48,6 @@ interface AdminUser {
   can_manage_transactions: boolean;
   can_manage_bot: boolean;
   can_approve_topups: boolean;
-  can_manage_team: boolean;
   added_by: string | null;
 }
 
@@ -87,7 +85,6 @@ const PERMISSION_KEYS: { key: keyof AdminUser; label: string; color: string }[] 
   { key: 'can_manage_transactions', label: 'Transactions', color: 'cyan' },
   { key: 'can_manage_bot', label: 'Bot Settings', color: 'slate' },
   { key: 'can_approve_topups', label: 'Approve Topups', color: 'teal' },
-  { key: 'can_manage_team', label: 'Manage Team', color: 'violet' },
 ];
 
 const defaultForm = {
@@ -102,7 +99,6 @@ const defaultForm = {
   can_manage_transactions: true,
   can_manage_bot: false,
   can_approve_topups: false,
-  can_manage_team: false,
 };
 
 interface RolePreset {
@@ -475,7 +471,7 @@ function UserManagementTab({
                       ? 'bg-blue-500/15 border-blue-500/25 text-blue-400'
                       : 'bg-muted/40 border-border/40 text-muted-foreground'
                   }`}>
-                    {getRoleDisplayName(user.role)}
+                    {user.role}
                   </Badge>
                 )}
               </div>
@@ -499,18 +495,8 @@ function RoleSelector({
   const [open, setOpen] = useState(false);
 
   const roles = [
-    {
-      value: 'admin',
-      label: getRoleDisplayName('admin'),
-      color: 'text-blue-400',
-      bg: 'bg-blue-500/15 border-blue-500/25',
-    },
-    {
-      value: 'user',
-      label: getRoleDisplayName('user'),
-      color: 'text-muted-foreground',
-      bg: 'bg-muted/40 border-border/40',
-    },
+    { value: 'admin', label: 'Admin', color: 'text-blue-400', bg: 'bg-blue-500/15 border-blue-500/25' },
+    { value: 'user', label: 'User', color: 'text-muted-foreground', bg: 'bg-muted/40 border-border/40' },
   ];
   const current = roles.find((r) => r.value === currentRole) || roles[1];
 
@@ -1084,7 +1070,6 @@ function UsdWalletsTab({ onError }: { onError: (msg: string) => void }) {
 export default function AdminManagement() {
   const { isSuperAdmin, permissions } = useAuth();
   const canApproveTopups = isSuperAdmin || !!permissions?.can_approve_topups;
-  const canManageTeam = isSuperAdmin || !!permissions?.can_manage_team;
   const [activeTab, setActiveTab] = useState<AdminTab>('admins');
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1258,12 +1243,12 @@ export default function AdminManagement() {
       label: 'USD Wallets',
       icon: <WalletIcon className="h-3.5 w-3.5" />,
     }] : []),
-    ...(canManageTeam ? [{
+    ...(isSuperAdmin ? [{
       id: 'team-invitations',
       label: 'Team Invitations',
       icon: <Mail className="h-3.5 w-3.5" />,
     }] : []),
-    ...(canManageTeam ? [{
+    ...(isSuperAdmin ? [{
       id: 'team-members',
       label: 'Team Members',
       icon: <Users className="h-3.5 w-3.5" />,
@@ -1552,12 +1537,12 @@ export default function AdminManagement() {
         )}
 
         {/* ── Team Invitations Tab ── */}
-        {activeTab === 'team-invitations' && canManageTeam && (
+        {activeTab === 'team-invitations' && isSuperAdmin && (
           <TeamInvitationsTab />
         )}
 
         {/* ── Team Members Tab ── */}
-        {activeTab === 'team-members' && canManageTeam && (
+        {activeTab === 'team-members' && isSuperAdmin && (
           <TeamMembersTab />
         )}
       </div>

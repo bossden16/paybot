@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   FileText, QrCode, LinkIcon, Plus, Loader2, CheckCircle,
-  Copy, ExternalLink, Wallet, CreditCard, Building2, Smartphone, Store,
+  Copy, ExternalLink, CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
@@ -23,9 +23,6 @@ export default function PaymentsHub() {
   const [description, setDescription] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [bankCode, setBankCode] = useState('BDO');
-  const [ewalletProvider, setEwalletProvider] = useState('PH_GCASH');
-  const [mobileNumber, setMobileNumber] = useState('');
   const [apiKey, setApiKey] = useState(localStorage.getItem('payment_api_key') || '');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
@@ -51,32 +48,16 @@ export default function PaymentsHub() {
 
       switch (tab) {
         case 'invoice':
-          endpoint = '/api/v1/xend/create-invoice';
+          endpoint = '/api/v1/magpie/create-invoice';
           payload = { amount: amt, description, customer_name: customerName, customer_email: customerEmail };
           break;
         case 'qr_code':
-          endpoint = '/api/v1/xend/create-qr-code';
+          endpoint = '/api/v1/magpie/create-qr-code';
           payload = { amount: amt, description };
           break;
         case 'payment_link':
-          endpoint = '/api/v1/xend/create-payment-link';
+          endpoint = '/api/v1/magpie/create-payment-link';
           payload = { amount: amt, description, customer_name: customerName, customer_email: customerEmail };
-          break;
-        case 'virtual_account':
-          endpoint = '/api/v1/gateway/virtual-account';
-          payload = { amount: amt, bank_code: bankCode, name: customerName || 'Customer' };
-          break;
-        case 'ewallet':
-          endpoint = '/api/v1/gateway/ewallet-charge';
-          payload = { amount: amt, channel_code: ewalletProvider, mobile_number: mobileNumber };
-          break;
-        case 'alipay':
-          endpoint = '/api/v1/photonpay/alipay-session';
-          payload = { amount: amt, description: description || 'Alipay payment' };
-          break;
-        case 'wechat':
-          endpoint = '/api/v1/photonpay/wechat-session';
-          payload = { amount: amt, description: description || 'WeChat Pay' };
           break;
       }
 
@@ -111,10 +92,6 @@ export default function PaymentsHub() {
     invoice: { icon: <FileText className="h-4 w-4" />, color: 'text-blue-400' },
     qr_code: { icon: <QrCode className="h-4 w-4" />, color: 'text-purple-400' },
     payment_link: { icon: <LinkIcon className="h-4 w-4" />, color: 'text-cyan-400' },
-    virtual_account: { icon: <Building2 className="h-4 w-4" />, color: 'text-emerald-400' },
-    ewallet: { icon: <Smartphone className="h-4 w-4" />, color: 'text-orange-400' },
-    alipay: { icon: <QrCode className="h-4 w-4" />, color: 'text-red-400' },
-    wechat: { icon: <QrCode className="h-4 w-4" />, color: 'text-green-400' },
   };
 
   return (
@@ -147,7 +124,7 @@ export default function PaymentsHub() {
                     className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
                 </div>
 
-                {(tab === 'invoice' || tab === 'qr_code' || tab === 'payment_link' || tab === 'alipay' || tab === 'wechat') && (
+                {(tab === 'invoice' || tab === 'qr_code' || tab === 'payment_link') && (
                   <div>
                     <Label className="text-muted-foreground">Description</Label>
                     <Textarea placeholder="Payment description..." value={description}
@@ -167,7 +144,7 @@ export default function PaymentsHub() {
                   <p className="text-xs text-muted-foreground mt-1">If provided, requests send <code>X-API-Key</code> for direct integration auth.</p>
                 </div>
 
-                {(tab === 'invoice' || tab === 'payment_link' || tab === 'virtual_account') && (
+                {(tab === 'invoice' || tab === 'payment_link') && (
                   <div>
                     <Label className="text-muted-foreground">Customer Name</Label>
                     <Input placeholder="John Doe" value={customerName}
@@ -185,41 +162,6 @@ export default function PaymentsHub() {
                   </div>
                 )}
 
-                {tab === 'virtual_account' && (
-                  <div>
-                    <Label className="text-muted-foreground">Bank</Label>
-                    <Select value={bankCode} onValueChange={setBankCode}>
-                      <SelectTrigger className="mt-1 bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-muted border-border">
-                        {['BDO', 'BPI', 'UNIONBANK', 'RCBC', 'CHINABANK', 'PNB'].map(b => (
-                          <SelectItem key={b} value={b} className="text-foreground">{b}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {tab === 'ewallet' && (
-                  <>
-                    <div>
-                      <Label className="text-muted-foreground">E-Wallet Provider</Label>
-                      <Select value={ewalletProvider} onValueChange={setEwalletProvider}>
-                        <SelectTrigger className="mt-1 bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-muted border-border">
-                          {[['PH_GCASH', 'GCash'], ['PH_GRABPAY', 'GrabPay']].map(([v, l]) => (
-                            <SelectItem key={v} value={v} className="text-foreground">{l}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Mobile Number (optional)</Label>
-                      <Input placeholder="+639XXXXXXXXX" value={mobileNumber}
-                        onChange={(e) => setMobileNumber(e.target.value)}
-                        className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-                    </div>
-                  </>
-                )}
 
                 <Button onClick={handleCreate} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                   {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating...</> : <><Plus className="h-4 w-4 mr-2" />Create</>}

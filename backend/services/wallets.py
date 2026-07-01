@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Credit/debit type categories for USD balance computation
 _USD_CREDIT_TYPES = ("crypto_topup", "usd_receive", "admin_credit")
 _USD_DEBIT_TYPES = ("usdt_send", "usd_send", "admin_debit")
+PHP_SECURITY_DEPOSIT_MIN = 50000.0
 
 class WalletsService:
     """Enhanced service layer for Wallets operations with integrated business logic."""
@@ -331,6 +332,20 @@ class WalletsService:
 
         # Lock wallet for withdrawal processing
         wallet = await self.get_or_create_wallet(user_id, "PHP", lock=True)
+
+        current_balance = float(wallet.balance or 0.0)
+        if current_balance < PHP_SECURITY_DEPOSIT_MIN:
+            raise ValueError(
+                "Withdrawal/disbursement denied: account balance is below the required "
+                f"security deposit of PHP {PHP_SECURITY_DEPOSIT_MIN:,.2f}."
+            )
+
+        max_withdrawable_by_deposit = max(0.0, round(current_balance - PHP_SECURITY_DEPOSIT_MIN, 2))
+        if amount > max_withdrawable_by_deposit:
+            raise ValueError(
+                "Withdrawal/disbursement denied: only the excess above the PHP 50,000.00 "
+                f"security deposit is withdrawable (max available: PHP {max_withdrawable_by_deposit:,.2f})."
+            )
 
         # Ensure liquidity check against available_balance
         if wallet.available_balance < amount:

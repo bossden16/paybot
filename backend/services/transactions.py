@@ -12,6 +12,8 @@ from services.event_bus import payment_event_bus
 
 logger = logging.getLogger(__name__)
 
+PAYMENT_CREDIT_FEE_RATE = 0.005
+
 
 # ------------------ Service Layer ------------------
 class TransactionsService:
@@ -80,7 +82,9 @@ class TransactionsService:
         """Credit the user's wallet (Maximizing automated T+0/T+1 logic)."""
         # Use row-level lock to prevent race conditions during balance update
         wallet = await self.get_or_create_wallet(txn.user_id, txn.currency or "PHP", lock=True)
-        amount = float(txn.amount or 0.0)
+        gross_amount = float(txn.amount or 0.0)
+        fee_amount = round(gross_amount * PAYMENT_CREDIT_FEE_RATE, 2)
+        amount = max(round(gross_amount - fee_amount, 2), 0.0)
         balance_before = float(wallet.balance or 0.0)
 
         # Logic for Automated Clearing:
@@ -104,7 +108,11 @@ class TransactionsService:
             amount=amount,
             balance_before=balance_before,
             balance_after=wallet.balance,
-            note=f"{gateway_label} payment credited: {txn.description or txn.transaction_type}",
+            note=(
+                f"{gateway_label} payment credited (gross={gross_amount:,.2f}, "
+                f"fee={fee_amount:,.2f}, net={amount:,.2f}): "
+                f"{txn.description or txn.transaction_type}"
+            ),
             status="completed",
             reference_id=txn.external_id or txn.xendit_id or f"txn-{txn.id}",
             created_at=datetime.now(timezone.utc),

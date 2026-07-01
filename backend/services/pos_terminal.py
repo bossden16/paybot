@@ -21,8 +21,7 @@ from schemas.pos_terminal import (
     POSTerminalTransactionCreate,
     POSTerminalDeviceCreate,
 )
-from services.maya_service import MayaService
-from services.paymongo_service import PayMongoService
+from services.magpie_service import MagpieService
 from services.wallets import WalletsService
 from services.event_bus import event_bus
 
@@ -34,8 +33,7 @@ class POSTerminalService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.maya_service = MayaService()
-        self.paymongo_service = PayMongoService()
+        self.magpie_service = MagpieService()
 
     def _generate_terminal_code(self) -> str:
         """Generate a unique terminal code."""
@@ -413,7 +411,7 @@ class POSTerminalService:
             if transaction_data.payment_method == "maya":
                 # Check if we should use QR payment for T0 settlement
                 # In real terminal mode, QR is often preferred for immediate settlement
-                maya_result = await self.maya_service.create_qr_payment(
+                maya_result = await self.magpie_service.create_qr_payment(
                     amount=transaction_data.amount / 100,
                     description=transaction_data.description,
                     external_id=order_id,
@@ -425,7 +423,7 @@ class POSTerminalService:
                     qr_content = maya_result.get("qr_content")
                 else:
                     # Fallback to terminal payment if QR fails
-                    maya_result = await self.maya_service.create_terminal_payment(
+                    maya_result = await self.magpie_service.create_terminal_payment(
                         amount=transaction_data.amount / 100,
                         description=transaction_data.description,
                         terminal_id=terminal.terminal_code,
@@ -440,11 +438,11 @@ class POSTerminalService:
                     else:
                         return {
                             "success": False,
-                            "error": f"Failed to create Maya payment: {maya_result.get('error')}",
+                            "error": f"Failed to create Magpie payment: {maya_result.get('error')}",
                         }
             elif transaction_data.payment_method == "card":
-                # Use Maya Business API for card payments
-                card_result = await self.maya_service.create_card_payment(
+                # Use Magpie card flow for card payments
+                card_result = await self.magpie_service.create_card_payment(
                     amount=transaction_data.amount / 100,
                     description=transaction_data.description,
                     customer_name=transaction_data.customer_name,
@@ -461,11 +459,10 @@ class POSTerminalService:
                         "error": f"Failed to create payment: {card_result.get('error')}",
                     }
             elif transaction_data.payment_method in ["gcash", "grabpay"]:
-                # Use PayMongo for e-wallet payments
-                paymongo_result = await self.paymongo_service.create_checkout(
+                # Use Magpie for e-wallet payments
+                paymongo_result = await self.magpie_service.create_checkout(
                     amount=transaction_data.amount,
                     description=transaction_data.description,
-                    payment_method=transaction_data.payment_method,
                     customer_email=transaction_data.customer_email,
                     customer_name=transaction_data.customer_name,
                     external_id=order_id,
@@ -536,7 +533,7 @@ class POSTerminalService:
             # Attempt to sync with gateway
             try:
                 if transaction.payment_method == "maya" and transaction.maya_checkout_id:
-                    status_res = await self.maya_service.get_checkout_status(transaction.maya_checkout_id)
+                    status_res = await self.magpie_service.get_checkout_status(transaction.maya_checkout_id)
                     if status_res.get("success"):
                         status = status_res.get("status", "").upper()
                         if status in ("PAID", "COMPLETED", "SETTLED", "SUCCESS", "AUTHORIZED"):
@@ -546,11 +543,11 @@ class POSTerminalService:
                             await self.update_transaction_status(
                                 order_id,
                                 "failed" if status in ("FAILED", "DECLINED") else status.lower(),
-                                failure_reason=f"Maya status: {status}"
+                                failure_reason=f"Magpie status: {status}"
                             )
                             await self.db.refresh(transaction)
                 elif transaction.payment_method in ["gcash", "grabpay"] and transaction.paymongo_checkout_id:
-                    # Sync with PayMongo if needed
+                    # E-wallet status sync is handled by Magpie webhook polling.
                     pass
             except Exception as e:
                 logger.warning(f"Failed to sync terminal transaction {order_id}: {e}")

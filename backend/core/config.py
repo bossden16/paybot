@@ -85,29 +85,17 @@ class Settings(BaseSettings):
     xendit_base_url: str = ""
     xendit_descriptor: str = "Click Store"
 
-    # Maya Manager Checkout API
-    maya_secret_key: str = ""
-    maya_webhook_secret: str = ""
-    maya_mode: str = "live"  # "sandbox" or "live"
-    maya_base_url: str = ""
-
-    # Maya Business API (for card payments and POS terminals)
-    maya_business_api_key: str = ""
-    maya_business_secret_key: str = ""
-    maya_business_mode: str = "live"  # "sandbox" or "live"
-    maya_business_base_url: str = "https://api.paymaya.com"
+    # Magpie API (primary payment provider)
+    magpie_api_key: str = ""
+    magpie_webhook_secret: str = ""
+    magpie_mode: str = "live"  # "sandbox" or "live"
+    magpie_base_url: str = ""
 
     # Facebook Messenger API
     messenger_app_id: str = ""
     messenger_app_secret: str = ""
     messenger_verify_token: str = ""
     messenger_page_access_token: str = ""
-
-    # PayMongo API
-    paymongo_secret_key: str = ""
-    paymongo_public_key: str = ""
-    paymongo_webhook_secret: str = ""
-    paymongo_mode: str = "test"  # "test" or "live"
 
     # PhotonPay API (Alipay / WeChat Pay collection)
     # Credentials from PhotonPay merchant portal (Settings > Developer)
@@ -189,11 +177,7 @@ class Settings(BaseSettings):
             "telegram_bot_token",
             "telegram_bot_username",
             "xendit_secret_key",
-            "maya_secret_key",
-            "maya_business_api_key",
-            "maya_business_secret_key",
-            "paymongo_secret_key",
-            "paymongo_public_key",
+            "magpie_api_key",
             "cloudflare_turnstile_secret_key",
             "jwt_secret_key",
         ):

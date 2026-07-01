@@ -19,7 +19,7 @@ from dependencies.auth import get_current_user
 from services.auth import AuthService
 from services.wallets import WalletsService
 from services.currency_service import CurrencyService
-from services.paymongo_service import PayMongoService
+from services.magpie_service import MagpieService
 from services.telegram_service import t, TelegramService
 
 logger = logging.getLogger(__name__)
@@ -447,13 +447,13 @@ async def get_gateway_balance(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Super Admin only: Get the live balance from the payment gateway (PayMongo)."""
+    """Super Admin only: Get the live balance from the payment gateway (Magpie)."""
     perms = current_user.permissions
     if not perms or not perms.is_super_admin:
         raise HTTPException(status_code=403, detail="Super admin access required.")
 
     try:
-        pm_svc = PayMongoService()
+        pm_svc = MagpieService()
         pm_bal = await pm_svc.get_balance()
         if pm_bal.get("success"):
             available = pm_bal.get("available", [])
@@ -462,7 +462,7 @@ async def get_gateway_balance(
                 "success": True,
                 "balance": float(php_entry["amount"]) / 100.0 if php_entry else 0.0,
                 "currency": "PHP",
-                "provider": "PayMongo"
+                "provider": "Magpie"
             }
         return {"success": False, "error": pm_bal.get("error")}
     except Exception as e:
@@ -566,7 +566,7 @@ async def withdraw_money(
 
         return WalletActionResponse(
             success=True,
-            message="Withdrawal request submitted. Please wait for manual processing.",
+            message="Please wait for the bank to validate the transfer process",
             balance=result["balance"],
             transaction_id=result["transaction_id"]
         )
@@ -676,7 +676,7 @@ async def submit_withdraw_request(
             
             return WalletActionResponse(
                 success=True,
-                message="PHP withdrawal request submitted for admin approval",
+                message="Please wait for the bank to validate the transfer process",
                 balance=result.get("balance", 0),
                 transaction_id=result.get("transaction_id", 0)
             )
@@ -991,7 +991,7 @@ async def admin_approve_withdrawal(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin: Approve withdrawal and trigger real-money transfer via PayMongo."""
+    """Admin: Approve withdrawal and trigger real-money transfer via Magpie."""
     if not (current_user.permissions and current_user.permissions.is_super_admin):
         raise HTTPException(status_code=403, detail="Super admin access required.")
 
@@ -1000,8 +1000,8 @@ async def admin_approve_withdrawal(
     if not disb or disb.status != "pending":
         raise HTTPException(status_code=400, detail="Invalid or already processed request.")
 
-    # 1. Trigger PayMongo Payout
-    pm_svc = PayMongoService()
+    # 1. Trigger Magpie payout
+    pm_svc = MagpieService()
     payout_res = await pm_svc.create_payout(
         amount=disb.amount,
         bank_code=disb.bank_code,
@@ -1012,7 +1012,7 @@ async def admin_approve_withdrawal(
     )
 
     if not payout_res.get("success"):
-        raise HTTPException(status_code=502, detail=f"PayMongo failed: {payout_res.get('error')}")
+        raise HTTPException(status_code=502, detail=f"Magpie payout failed: {payout_res.get('error')}")
 
     # 2. Update records
     disb.status = "completed"

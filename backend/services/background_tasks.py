@@ -5,8 +5,7 @@ from sqlalchemy import select, update, and_
 from core.database import db_manager
 from models.transactions import Transactions
 from models.wallets import Wallets
-from services.maya_service import MayaService
-from services.paymongo_service import PayMongoService
+from services.magpie_service import MagpieService
 from services.transactions import TransactionsService
 
 logger = logging.getLogger(__name__)
@@ -15,8 +14,7 @@ class BackgroundTasksService:
     """Automated operations service for background grid maintenance."""
 
     def __init__(self):
-        self.maya_service = MayaService()
-        self.paymongo_service = PayMongoService()
+        self.magpie_service = MagpieService()
 
     async def sync_pending_transactions(self):
         """Automated sync of pending gateway transactions."""
@@ -37,16 +35,14 @@ class BackgroundTasksService:
             for txn in pending_txns:
                 try:
                     if txn.transaction_type in ["invoice", "qr_code", "payment_link"]:
-                        # Sync with Maya
-                        status_res = await self.maya_service.get_checkout_status(txn.xendit_id)
+                        # Sync with Magpie
+                        status_res = await self.magpie_service.get_checkout_status(txn.xendit_id)
                         if status_res.get("success"):
-                            maya_status = status_res.get("status", "").upper()
-                            if maya_status in ["COMPLETED", "SUCCESS", "PAYMENT_SUCCESS"]:
-                                await txn_service.mark_as_paid(txn, gateway_label="Maya Auto-Sync")
-                            elif maya_status in ["EXPIRED", "CANCELLED"]:
+                            magpie_status = status_res.get("status", "").upper()
+                            if magpie_status in ["COMPLETED", "SUCCESS", "PAYMENT_SUCCESS"]:
+                                await txn_service.mark_as_paid(txn, gateway_label="Magpie Auto-Sync")
+                            elif magpie_status in ["EXPIRED", "CANCELLED"]:
                                 await txn_service.mark_as_expired(txn)
-
-                    # Add PayMongo sync logic if needed
                 except Exception as e:
                     logger.error(f"Failed to auto-sync transaction {txn.external_id}: {e}")
 
