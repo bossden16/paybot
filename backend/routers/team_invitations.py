@@ -118,6 +118,9 @@ def _send_invitation_email(to_email: str, token: str, role: str, inviter_name: s
         logger.info("Invitation email sent to %s", to_email)
     except Exception as exc:
         logger.error("Failed to send invitation email to %s: %s", to_email, exc)
+
+
+def _can_manage_team(admin: Optional[AdminUser]) -> bool:
     if not admin:
         return False
     return bool(admin.is_super_admin or admin.can_manage_team)

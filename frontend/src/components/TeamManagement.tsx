@@ -43,7 +43,7 @@ interface TeamInvitation {
 
 interface TeamMember {
   id: number;
-  name: string;
+  name?: string;
   telegram_id: string;
   role: string;
   permissions: Record<string, boolean>;

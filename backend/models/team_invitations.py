@@ -43,6 +43,9 @@ class TeamInvitation(Base):
     # Notes for invitation
     notes = Column(String(512), nullable=True)
 
+    organization_id = Column(String(64), index=True, nullable=True)
+    organization_name = Column(String(256), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
