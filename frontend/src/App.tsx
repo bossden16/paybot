@@ -29,6 +29,7 @@ import RequireSuperAdmin from './components/RequireSuperAdmin';
 import RequireDeveloperRole from './components/RequireDeveloperRole';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import DeveloperExperience from './pages/DeveloperExperience';
+import ApiDocsPage from './pages/ApiDocsPage';
 import Policies from './pages/Policies';
 import Features from './pages/Features';
 import Pricing from './pages/Pricing';
@@ -143,6 +144,7 @@ function AuthAwareShell() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/messenger" element={<MessengerPage />} />
             <Route path="/developer-experience" element={<RequireDeveloperRole><DeveloperExperience /></RequireDeveloperRole>} />
+            <Route path="/api-docs" element={<RequireDeveloperRole><ApiDocsPage /></RequireDeveloperRole>} />
             <Route path="/admin-management" element={<ProtectedAdminRoute><AdminManagement /></ProtectedAdminRoute>} />
             <Route path="/bot-messages" element={<ProtectedAdminRoute><BotMessagesPage /></ProtectedAdminRoute>} />
             <Route path="/topup-requests" element={<RequireSuperAdmin><TopupRequestsPage /></RequireSuperAdmin>} />

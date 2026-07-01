@@ -10,7 +10,7 @@ import {
   Wallet, Settings, LogOut, Menu, User, ShieldCheck, Crown,
   ChevronRight, Zap, Bell, CheckCircle, XCircle, Clock, Bot,
   MessageSquare, ArrowUpFromLine, DollarSign, ClipboardList,
-  ChevronDown, Lock, FileCheck, AlertCircle, Sparkles, Code2,
+  ChevronDown, Lock, FileCheck, AlertCircle, Sparkles, Code2, BookOpen,
 } from 'lucide-react';
 import '../styles/dashboard-enhancements.css';
 
@@ -41,6 +41,7 @@ const userNavItems: NavItem[] = [
   { label: 'Wallet', icon: Wallet, path: '/wallet' },
   { label: 'Bot Messages', icon: MessageSquare, path: '/bot-messages' },
   { label: 'Developer Experience', icon: Code2, path: '/developer-experience', permission: 'can_manage_bot' },
+  { label: 'API Docs', icon: BookOpen, path: '/api-docs', permission: 'can_manage_bot' },
 ];
 
 const adminNavItems: NavItem[] = [
