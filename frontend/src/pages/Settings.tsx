@@ -86,7 +86,7 @@ export default function Settings() {
             <Card key={card.title} className="group border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-200">
               <CardHeader className="space-y-4 pb-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-900">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-foreground">
                     {card.icon}
                   </div>
                   <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] uppercase tracking-[0.16em]">{card.badge}</Badge>

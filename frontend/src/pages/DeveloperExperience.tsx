@@ -130,7 +130,14 @@ const SECRET_RE = /(secret|token|api[_-]?key|private|password)/i;
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 async function apiFetch(url: string, options?: RequestInit) {
-  const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
+  const authToken = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  const res = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    ...options,
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Request failed (${res.status})`);
@@ -495,8 +502,17 @@ export default function DeveloperExperience() {
     } finally { setSimulating(false); }
   };
 
-  const toggleReveal = (id: number) =>
-    setRevealedKeys((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleReveal = (id: number) => {
+    setRevealedKeys((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) {
+        n.delete(id);
+      } else {
+        n.add(id);
+      }
+      return n;
+    });
+  };
 
   // ── code snippets ──
   const snippets: Record<string, string> = {

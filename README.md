@@ -54,17 +54,56 @@ xend operates on a "Trusted Node" architecture, ensuring data integrity and high
 - **Global Clearing**: Specialized PhotonPay channels for high-volume Alipay and WeChat Pay international trade.
 
 <<<<<<< HEAD
-### 💎 Liquidity & Vault Management
+### 💎 Digital Wallet & Liquidity Ecosystem
 - **Multi-Currency Nodes**: Seamlessly manage PHP, USD, and USDT (TRC-20) liquidity.
 - **Regulated Clearing**: Automated T+1 local bank clearing and real-time inter-vault transfers.
-- **Audit-Ready Ledger**: Full immutable transaction history for compliance and regulatory reporting.
-=======
-### 🏦 Digital Wallet Ecosystem
 - **Instant KYB/KYC**: Guided registration flow via Telegram.
-- **Multi-Currency**: Manage PHP, USD, and USDT (TRC20) in a single interface.
 - **Peer-to-Peer**: Zero-fee instant transfers between platform users.
 - **Auto-Sync**: Real-time balance updates across bot, mobile, and dashboard.
->>>>>>> parent of c6d943c (feat: delete KYC and KYB features from dashboard and telegram bot)
+- **Audit-Ready Ledger**: Full immutable transaction history for compliance and regulatory reporting.
+
+---
+
+## 🧑‍💻 Developer Quickstart
+These steps help contributors get the project running locally and understand the main development workflows.
+
+### Prerequisites
+- Python 3.11
+- Node.js LTS
+- `pnpm` via Corepack (installed automatically by `start_app_v2.sh`)
+- `git`
+
+### Local setup
+1. Copy environment examples:
+   - `cp backend/.env.example backend/.env`
+   - `cp frontend/.env.example frontend/.env`
+2. Install backend dependencies:
+   - `cd backend && python -m pip install --upgrade pip && python -m pip install -r requirements.txt`
+3. Install frontend dependencies:
+   - `cd frontend && pnpm install`
+
+### Start development servers
+Use the repo's starter script to run backend and frontend together:
+
+```bash
+bash start_app_v2.sh
+```
+
+For Windows, run:
+
+```powershell
+.\"setup_windows.ps1\"; .\start_local_windows.ps1
+```
+
+### Run tests
+- Backend tests:
+  - `cd backend && python -m pytest tests/ -v --tb=short`
+- Frontend lint:
+  - `cd frontend && pnpm lint`
+
+### Build production assets
+- `cd frontend && pnpm build`
+- If the backend serves static files from `backend/static/`, copy the generated assets as needed.
 
 ---
 

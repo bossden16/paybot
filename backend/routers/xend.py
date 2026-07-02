@@ -153,6 +153,13 @@ async def _create_checkout_transaction(
     descriptor = (request.descriptor or "").strip().upper()[:22]
     base_description = (request.description or "").strip() or "magpie payment"
 
+    if not service.api_key:
+        return {
+            "success": False,
+            "message": "Magpie API key is not configured",
+            "error": "MAGPIE_API_KEY is not set",
+        }
+
     # Keep the user description intact while injecting descriptor/merchant context
     # so checkout pages and records visibly reflect these settings.
     checkout_desc = base_description
@@ -168,26 +175,34 @@ async def _create_checkout_transaction(
         "source": "magpie",
     }
 
-    if use_qr:
-        result = await service.create_qr_payment(
-            amount=request.amount,
-            description=checkout_desc,
-            external_id=external_id,
-            payment_methods=payment_methods,
-            merchant_name=merchant_name,
-            descriptor=descriptor,
-        )
-    else:
-        result = await service.create_checkout(
-            amount=request.amount,
-            description=checkout_desc,
-            descriptor=descriptor,
-            merchant_name=merchant_name,
-            customer_name=request.customer_name,
-            customer_email=request.customer_email,
-            external_id=external_id,
-            metadata=metadata,
-        )
+    try:
+        if use_qr:
+            result = await service.create_qr_payment(
+                amount=request.amount,
+                description=checkout_desc,
+                external_id=external_id,
+                payment_methods=payment_methods,
+                merchant_name=merchant_name,
+                descriptor=descriptor,
+            )
+        else:
+            result = await service.create_checkout(
+                amount=request.amount,
+                description=checkout_desc,
+                descriptor=descriptor,
+                merchant_name=merchant_name,
+                customer_name=request.customer_name,
+                customer_email=request.customer_email,
+                external_id=external_id,
+                metadata=metadata,
+            )
+    except Exception as exc:
+        logger.exception("Magpie payment creation failed for %s", external_id)
+        return {
+            "success": False,
+            "message": "Payment creation failed",
+            "error": str(exc),
+        }
 
     if not result.get("success"):
         return {"success": False, "message": result.get("error", "Failed to create payment")}

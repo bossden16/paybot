@@ -34,10 +34,18 @@ interface Terminal {
   created_at: string;
 }
 
+const getAuthHeaders = (extra: Record<string, string> = {}) => {
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') : '';
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+};
+
 const api = {
   getPendingRequests: async () => {
     const response = await fetch('/api/v1/pos-terminals/requests/pending', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to fetch requests');
     return response.json();
@@ -46,7 +54,7 @@ const api = {
   approveRequest: async (requestId: number) => {
     const response = await fetch(`/api/v1/pos-terminals/requests/${requestId}/approve`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to approve request');
     return response.json();
@@ -55,10 +63,9 @@ const api = {
   rejectRequest: async (requestId: number, reason: string) => {
     const response = await fetch(`/api/v1/pos-terminals/requests/${requestId}/reject`, {
       method: 'POST',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
+      }),
       body: JSON.stringify({ reason }),
     });
     if (!response.ok) throw new Error('Failed to reject request');
@@ -67,7 +74,7 @@ const api = {
 
   getAllTerminals: async () => {
     const response = await fetch('/api/v1/pos-terminals/all', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to fetch terminals');
     return response.json();
@@ -76,7 +83,7 @@ const api = {
   deactivateTerminal: async (terminalId: number) => {
     const response = await fetch(`/api/v1/pos-terminals/${terminalId}/deactivate`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to deactivate terminal');
     return response.json();
@@ -110,35 +117,35 @@ const RequestCard: React.FC<{ request: TerminalRequest; onAction: () => void }> 
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex justify-between items-start">
+      <CardHeader className="border-b border-slate-100 pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-lg">{request.business_name}</CardTitle>
-            <CardDescription>
+                <CardTitle className="text-lg font-semibold text-foreground">{request.business_name}</CardTitle>
+                <CardDescription className="mt-1 text-sm text-muted-foreground">
               Requested by {request.user_name} (ID: {request.user_id})
             </CardDescription>
           </div>
-          <Badge>{request.status}</Badge>
+          <Badge className="bg-slate-100 text-slate-700">{request.status}</Badge>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label className="text-xs font-semibold text-gray-600">Business Type</Label>
-            <p>{request.business_type || 'Not specified'}</p>
+            <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Business Type</Label>
+            <p className="mt-1 text-sm text-foreground">{request.business_type || 'Not specified'}</p>
           </div>
           <div>
-            <Label className="text-xs font-semibold text-gray-600">Location</Label>
-            <p>{request.location || 'Not specified'}</p>
+            <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Location</Label>
+            <p className="mt-1 text-sm text-foreground">{request.location || 'Not specified'}</p>
           </div>
           <div>
-            <Label className="text-xs font-semibold text-gray-600">Monthly Volume</Label>
-            <p>{request.monthly_transaction_volume || 'Not specified'}</p>
+              <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Monthly Volume</Label>
+              <p className="mt-1 text-sm text-foreground">{request.monthly_transaction_volume || 'Not specified'}</p>
           </div>
           <div>
-            <Label className="text-xs font-semibold text-gray-600">Requested Methods</Label>
-            <div className="flex flex-wrap gap-1 mt-1">
+            <Label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requested Methods</Label>
+            <div className="mt-1 flex flex-wrap gap-1">
               {Array.isArray(request.required_payment_methods) && request.required_payment_methods.map((method) => (
                 <Badge key={method} variant="outline" className="text-xs">
                   {method}
@@ -285,17 +292,17 @@ export const POSTerminalAdminPanel: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">POS Terminal Management</h1>
-        <p className="text-gray-600 mt-2">Manage terminal requests and assignments</p>
+      <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+        <h1 className="text-3xl font-bold text-foreground">POS Terminal Management</h1>
+        <p className="mt-2 text-sm font-medium text-slate-600">Manage terminal requests and assignments</p>
       </div>
 
       <Tabs defaultValue="requests" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="requests">
+        <TabsList className="bg-slate-100 p-1">
+          <TabsTrigger value="requests" className="data-[state=active]:bg-white data-[state=active]:text-foreground text-slate-600">
             Pending Requests ({pendingQuery.data?.total || 0})
           </TabsTrigger>
-          <TabsTrigger value="terminals">
+          <TabsTrigger value="terminals" className="data-[state=active]:bg-white data-[state=active]:text-foreground text-slate-600">
             All Terminals ({allTerminalsQuery.data?.total || 0})
           </TabsTrigger>
         </TabsList>
@@ -304,7 +311,7 @@ export const POSTerminalAdminPanel: React.FC = () => {
           {pendingQuery.isLoading ? (
             <Card>
               <CardContent className="pt-6">
-                <p className="text-center text-gray-500">Loading requests...</p>
+                <p className="text-center text-slate-600">Loading requests...</p>
               </CardContent>
             </Card>
           ) : pendingQuery.isError ? (
@@ -331,8 +338,8 @@ export const POSTerminalAdminPanel: React.FC = () => {
               <CardContent className="pt-12 pb-12">
                 <div className="text-center space-y-4">
                   <CheckCircle2 className="w-16 h-16 mx-auto text-green-400" />
-                  <h3 className="text-lg font-medium">No pending requests</h3>
-                  <p className="text-gray-600">All terminal requests have been reviewed</p>
+                  <h3 className="text-lg font-semibold text-foreground">No pending requests</h3>
+                  <p className="text-sm text-slate-600">All terminal requests have been reviewed</p>
                 </div>
               </CardContent>
             </Card>
@@ -343,7 +350,7 @@ export const POSTerminalAdminPanel: React.FC = () => {
           {allTerminalsQuery.isLoading ? (
             <Card>
               <CardContent className="pt-6">
-                <p className="text-center text-gray-500">Loading terminals...</p>
+                <p className="text-center text-slate-600">Loading terminals...</p>
               </CardContent>
             </Card>
           ) : allTerminalsQuery.isError ? (
@@ -358,20 +365,20 @@ export const POSTerminalAdminPanel: React.FC = () => {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>All Terminals</CardTitle>
+                <CardTitle className="text-foreground">All Terminals</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="text-left px-4 py-3 font-semibold">Name</th>
-                        <th className="text-left px-4 py-3 font-semibold">Code</th>
-                        <th className="text-left px-4 py-3 font-semibold">User ID</th>
-                        <th className="text-left px-4 py-3 font-semibold">Location</th>
-                        <th className="text-left px-4 py-3 font-semibold">Methods</th>
-                        <th className="text-left px-4 py-3 font-semibold">Status</th>
-                        <th className="text-left px-4 py-3 font-semibold">Action</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Name</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Code</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">User ID</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Location</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Methods</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Action</th>
                       </tr>
                     </thead>
                     <tbody>

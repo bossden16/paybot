@@ -138,7 +138,7 @@ function StatCard({ label, value, sub, icon, loading, tone = 'slate' }: {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 group-hover:text-slate-600 transition-colors">{label}</p>
-            <p className="text-2xl font-bold text-slate-900 transition-all duration-300">
+            <p className="text-2xl font-bold text-foreground transition-all duration-300">
               {loading ? (
                 <span className="inline-block w-12 h-8 bg-slate-100 rounded-lg animate-pulse" />
               ) : value}
@@ -263,7 +263,7 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <span>{greeting.icon}</span>
-                <h1 className="text-2xl font-semibold text-slate-900">
+                <h1 className="text-2xl font-semibold text-foreground">
                   {greeting.text}{userName ? `, ${userName}` : ''}
                 </h1>
               </div>
@@ -291,7 +291,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-2 min-w-[230px]">
               <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3">
                 <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Revenue Today</p>
-                <p className="text-base font-semibold text-slate-900 mt-1">₱{fmt(stats.paid_amount || 0)}</p>
+                <p className="text-base font-semibold text-foreground mt-1">₱{fmt(stats.paid_amount || 0)}</p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3">
                 <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Pending</p>
@@ -315,7 +315,7 @@ export default function Dashboard() {
                   <Landmark className="h-4 w-4" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-slate-900 mb-1">
+              <p className="text-2xl font-bold text-foreground mb-1">
                 {loading
                   ? <span className="inline-block w-24 h-8 bg-slate-100 rounded-lg animate-pulse" />
                   : `₱${fmt(walletBalance || 0)}`
@@ -340,7 +340,7 @@ export default function Dashboard() {
                   <Globe className="h-4 w-4" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-slate-900 mb-1">
+              <p className="text-2xl font-bold text-foreground mb-1">
                 {loading
                   ? <span className="inline-block w-24 h-8 bg-slate-100 rounded-lg animate-pulse" />
                   : `$${usdWalletBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -382,15 +382,15 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-4 gap-5">
               <div>
-                <p className="text-lg font-bold text-slate-900">{fmtUsd(usdtStats.settlement)}</p>
+                <p className="text-lg font-bold text-foreground">{fmtUsd(usdtStats.settlement)}</p>
                 <p className="text-[10px] text-slate-500 mt-0.5">Total Settled</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-slate-900">{usdtStats.txnCount}</p>
+                <p className="text-lg font-bold text-foreground">{usdtStats.txnCount}</p>
                 <p className="text-[10px] text-slate-500 mt-0.5">Transactions</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-slate-900">
+                <p className="text-lg font-bold text-foreground">
                   {usdtStats.txnCount > 0 ? fmtUsd(usdtStats.settlement / usdtStats.txnCount) : '$0.00'}
                 </p>
                 <p className="text-[10px] text-slate-500 mt-0.5">Avg per Txn</p>
@@ -412,7 +412,7 @@ export default function Dashboard() {
         <Card className="card-3d bg-white border border-slate-200 shadow-sm hover:shadow-lg overflow-hidden">
           <CardHeader className="pb-3 pt-5 px-5 border-b border-slate-100">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-100 to-orange-50">
                   <Sparkles className="h-4 w-4 text-orange-600" />
                 </div>
@@ -433,6 +433,7 @@ export default function Dashboard() {
                 { to: '/transactions', icon: FileText, label: 'Transactions' },
                 { to: '/reports', icon: BarChart3, label: 'Analytics' },
                 { to: '/wallet', icon: Wallet, label: 'Wallet' },
+                { to: '/compliance', icon: ShieldCheck, label: 'Compliance' },
                 { to: '/refunds', icon: RotateCcw, label: 'Refunds' },
                 { to: '/schedules', icon: CalendarDays, label: 'Schedules' },
                 { to: '/customers', icon: Users, label: 'Customers' },
@@ -442,9 +443,9 @@ export default function Dashboard() {
                   <button className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left hover:bg-slate-50 transition-smooth group">
                     <div className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-md bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 group-hover:scale-110 transition-smooth">
-                        <action.icon className="h-4 w-4 text-slate-600 group-hover:text-slate-900 transition-colors" />
+                        <action.icon className="h-4 w-4 text-slate-600 group-hover:text-foreground transition-colors" />
                       </div>
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">{action.label}</span>
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-foreground transition-colors">{action.label}</span>
                     </div>
                     <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-smooth" />
                   </button>
@@ -481,12 +482,12 @@ export default function Dashboard() {
         {/* Recent Transactions */}
         <Card className="bg-white border border-slate-200 lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-3 pt-5 px-5">
-            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+            <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Activity className="h-4 w-4 text-slate-500" />
               Recent Transactions
             </CardTitle>
             <Link to="/transactions">
-              <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900 h-7 px-2 text-xs gap-1">
+              <Button variant="ghost" size="sm" className="text-slate-600 hover:text-foreground h-7 px-2 text-xs gap-1">
                 View All
                 <ArrowRight className="h-3 w-3" />
               </Button>
@@ -511,7 +512,7 @@ export default function Dashboard() {
                 <div className="h-12 w-12 rounded-lg bg-slate-100 flex items-center justify-center mb-3">
                   <DollarSign className="h-6 w-6 text-slate-400" />
                 </div>
-                <p className="text-slate-900 text-sm font-semibold">No transactions yet</p>
+                <p className="text-foreground text-sm font-semibold">No transactions yet</p>
                 <p className="text-slate-500 text-xs mt-1 mb-4">Create your first payment to get started</p>
                 <Link to="/payments">
                   <Button size="sm" className="bg-slate-900 hover:bg-slate-800 text-white text-xs h-8 rounded-lg">
@@ -540,7 +541,7 @@ export default function Dashboard() {
                           {tc.icon}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-900 truncate leading-tight">
+                          <p className="text-sm font-medium text-foreground truncate leading-tight">
                             {txn.description || txn.transaction_type.replace(/_/g, ' ')}
                           </p>
                           <p className="text-xs text-slate-500 truncate mt-0.5">
@@ -552,7 +553,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 ml-2 shrink-0">
-                        <span className="text-sm font-semibold text-slate-900">
+                        <span className="text-sm font-semibold text-foreground">
                           ₱{fmt(txn.amount)}
                         </span>
                         <span className={`${sc.bg} ${sc.text} ${sc.border} border text-[10px] transition-all duration-500 hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
@@ -577,10 +578,10 @@ export default function Dashboard() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Revenue Breakdown</h2>
+                <h2 className="text-sm font-semibold text-foreground">Revenue Breakdown</h2>
                 <p className="text-xs text-slate-500 mt-0.5">Paid vs Pending vs Expired</p>
               </div>
-              <Link to="/reports" className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              <Link to="/reports" className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-foreground transition-colors">
                 Full report <ArrowRight className="h-3 w-3" />
               </Link>
             </div>

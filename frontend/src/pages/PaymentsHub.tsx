@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import Layout from '@/components/Layout';
 
 export default function PaymentsHub() {
-  const { user } = useAuth();
+  const { user, permissions, isSuperAdmin } = useAuth();
   const [tab, setTab] = useState('invoice');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -29,6 +29,8 @@ export default function PaymentsHub() {
 
   usePaymentEvents({ enabled: !!user });
 
+  const canAccessPayments = Boolean(isSuperAdmin || permissions?.can_manage_payments);
+
   const reset = () => { setAmount(''); setDescription(''); setCustomerName(''); setCustomerEmail(''); setResult(null); };
 
   useEffect(() => {
@@ -38,6 +40,11 @@ export default function PaymentsHub() {
   }, [apiKey]);
 
   const handleCreate = async () => {
+    if (!canAccessPayments) {
+      toast.error('You do not have permission to create payments.');
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) { toast.error('Enter a valid amount'); return; }
     setLoading(true);
     setResult(null);
@@ -93,6 +100,17 @@ export default function PaymentsHub() {
     qr_code: { icon: <QrCode className="h-4 w-4" />, color: 'text-purple-400' },
     payment_link: { icon: <LinkIcon className="h-4 w-4" />, color: 'text-cyan-400' },
   };
+
+  if (!canAccessPayments) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto rounded-2xl border border-red-200 bg-red-50/80 p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-semibold text-red-700">Access restricted</h1>
+          <p className="mt-3 text-sm text-red-600">Only users with payment management permission can create payment collection links here.</p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

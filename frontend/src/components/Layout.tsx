@@ -11,6 +11,7 @@ import {
   ChevronRight, Zap, Bell, CheckCircle, XCircle, Clock, Bot,
   MessageSquare, ArrowUpFromLine, DollarSign, ClipboardList,
   ChevronDown, Lock, FileCheck, AlertCircle, Sparkles, Code2, BookOpen,
+  MonitorSmartphone,
 } from 'lucide-react';
 import { APP_NAME } from '@/lib/brand';
 import '../styles/dashboard-enhancements.css';
@@ -40,6 +41,7 @@ const userNavItems: NavItem[] = [
   { label: 'Transactions', icon: FileText, path: '/transactions' },
   { label: 'Reports', icon: BarChart3, path: '/reports' },
   { label: 'Wallet', icon: Wallet, path: '/wallet' },
+  { label: 'Compliance', icon: FileCheck, path: '/compliance' },
   { label: 'Bot Messages', icon: MessageSquare, path: '/bot-messages' },
   { label: 'Developer Experience', icon: Code2, path: '/developer-experience', permission: 'can_manage_bot' },
   { label: 'API Docs', icon: BookOpen, path: '/api-docs', permission: 'can_manage_bot' },
@@ -48,6 +50,7 @@ const userNavItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   { label: 'KYB Registrations', icon: ClipboardList, path: '/kyb-registrations' },
   { label: 'KYC Verifications', icon: ShieldCheck, path: '/kyc-verifications' },
+  { label: 'POS Terminal Requests', icon: MonitorSmartphone, path: '/pos-terminals' },
   { label: 'Top-up Requests', icon: DollarSign, path: '/topup-requests' },
   { label: 'USDT Requests', icon: Send, path: '/usdt-send-requests' },
   { label: 'Bank Deposits', icon: ArrowUpFromLine, path: '/bank-deposits' },
@@ -105,7 +108,7 @@ export default function Layout({ children, connected }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* ─── Desktop Sidebar ─── */}
-      <aside className="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-slate-200 bg-gradient-to-b from-white via-white to-slate-50/80">
+      <aside className="hidden lg:flex flex-col w-64 h-screen min-h-0 sticky top-0 border-r border-slate-200 bg-gradient-to-b from-white via-white to-slate-50/80">
         {/* Logo */}
         <div className="h-16 flex items-center px-5 border-b border-slate-100 bg-white/90 backdrop-blur-sm">
           <Link to="/" className="flex items-center gap-2.5 group">
@@ -113,7 +116,7 @@ export default function Layout({ children, connected }: LayoutProps) {
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
               <Sparkles className="h-4 w-4 text-white relative z-10 group-hover:animate-spin transition-transform" />
             </div>
-            <span className="text-base font-bold bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent group-hover:from-slate-700 group-hover:to-slate-500 transition-all duration-300">{APP_NAME}</span>
+            <span className="text-base font-bold text-foreground">{APP_NAME}</span>
           </Link>
         </div>
 
@@ -123,7 +126,7 @@ export default function Layout({ children, connected }: LayoutProps) {
             <div key={section.label} className={idx > 0 ? 'pt-2' : ''}>
               {section.label !== 'Main' && (
                 <div className="px-3 py-2 flex items-center justify-between group">
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{section.label}</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{section.label}</p>
                   {section.label === 'Administration' && isSuperAdmin && (
                     <Crown className="h-3 w-3 text-amber-500" />
                   )}
@@ -137,12 +140,12 @@ export default function Layout({ children, connected }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-smooth ${
-                        active
-                          ? 'bg-gradient-to-r from-slate-100 to-blue-50 text-slate-900 shadow-sm border border-slate-200'
-                          : 'text-slate-600 hover:bg-white hover:text-slate-900 hover:border hover:border-slate-200'
-                      }`}
+                          active
+                            ? 'bg-muted/10 text-foreground shadow-sm border border-slate-200'
+                            : 'text-muted-foreground hover:bg-white hover:text-foreground hover:border hover:border-slate-200'
+                        }`}
                     >
-                      <item.icon className={`h-4 w-4 shrink-0 transition-transform ${active ? 'text-slate-900 animate-float' : 'text-slate-400 group-hover:scale-110'}`} />
+                      <item.icon className={`h-4 w-4 shrink-0 transition-transform ${active ? 'text-foreground animate-float' : 'text-muted-foreground group-hover:scale-110'}`} />
                       <span className="truncate">{item.label}</span>
                       {active && <ChevronRight className="h-3.5 w-3.5 ml-auto text-slate-400 animate-float" style={{animationDelay: '0.2s'}} />}
                     </Link>
@@ -166,7 +169,7 @@ export default function Layout({ children, connected }: LayoutProps) {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-slate-900 truncate">{user?.name || user?.telegram_username || 'Admin'}</p>
+              <p className="text-sm font-medium text-foreground truncate">{user?.name || user?.telegram_username || 'Admin'}</p>
               <p className={`text-xs font-medium truncate ${isSuperAdmin ? 'text-amber-600' : 'text-slate-500'}`}>
                 {isSuperAdmin ? '👑 Super Administrator' : '🔐 Administrator'}
               </p>
@@ -225,11 +228,11 @@ export default function Layout({ children, connected }: LayoutProps) {
                               onClick={() => setMobileOpen(false)}
                               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                                 active
-                                  ? 'bg-slate-100 text-slate-900'
-                                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                  ? 'bg-slate-100 text-foreground'
+                                  : 'text-slate-600 hover:bg-slate-50 hover:text-foreground'
                               }`}
                             >
-                              <item.icon className={`h-4 w-4 shrink-0 ${active ? 'text-slate-900' : 'text-slate-400'}`} />
+                              <item.icon className={`h-4 w-4 shrink-0 ${active ? 'text-foreground' : 'text-slate-400'}`} />
                               <span className="truncate">{item.label}</span>
                               {active && <ChevronRight className="h-3.5 w-3.5 ml-auto text-slate-400" />}
                             </Link>
@@ -282,8 +285,8 @@ export default function Layout({ children, connected }: LayoutProps) {
         <div className={`hidden lg:flex h-16 items-center justify-between px-6 sticky top-0 z-40 transition-all duration-200 ${
           scrolled ? 'bg-white/80 backdrop-blur-md border-b border-slate-200' : 'bg-transparent'
         }`}>
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-medium text-slate-500">
+              <div className="flex items-center gap-3">
+            <h2 className="text-sm font-medium text-muted-foreground">
               {allItems.find(n => isActive(n.path))?.label || 'Dashboard'}
             </h2>
           </div>
@@ -299,11 +302,11 @@ export default function Layout({ children, connected }: LayoutProps) {
               </span>
             )}
             <div className="h-8 w-px bg-slate-200 mx-1" />
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
               <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center">
-                <User className="h-3.5 w-3.5 text-slate-500" />
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
-              <span className="text-xs font-medium text-slate-700">{user?.name || user?.telegram_username || 'Admin'}</span>
+              <span className="text-xs font-medium text-foreground">{user?.name || user?.telegram_username || 'Admin'}</span>
             </div>
           </div>
         </div>

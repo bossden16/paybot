@@ -49,7 +49,7 @@ const METHOD_OPTIONS = [
 const QR_METHODS = new Set(['qrph', 'maya', 'gcash', 'grabpay', 'alipay', 'wechat_pay']);
 
 export default function CreatePayment() {
-  const { user } = useAuth();
+  const { user, permissions, isSuperAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const initialType = searchParams.get('type') || 'invoice';
 
@@ -69,6 +69,8 @@ export default function CreatePayment() {
   );
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  const canAccessPayments = Boolean(isSuperAdmin || permissions?.can_manage_payments);
 
   const visibleMethods = useMemo(
     () => METHOD_OPTIONS.filter((m) => (paymentType === 'qr_code' ? QR_METHODS.has(m.value) : true)),
@@ -92,6 +94,11 @@ export default function CreatePayment() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAccessPayments) {
+      toast.error('You do not have permission to create payments.');
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
@@ -155,6 +162,17 @@ export default function CreatePayment() {
   };
 
   const currentType = typeConfig[paymentType as keyof typeof typeConfig] || typeConfig.invoice;
+
+  if (!canAccessPayments) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto rounded-2xl border border-red-200 bg-red-50/80 p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-semibold text-red-700">Access restricted</h1>
+          <p className="mt-3 text-sm text-red-600">Only users with payment management permission can create payment collection requests.</p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

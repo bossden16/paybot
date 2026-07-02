@@ -45,6 +45,7 @@ const NAV_LINKS = [
   { label: 'Features', to: '/features' },
   { label: 'Pricing',  to: '/pricing' },
   { label: 'Policies', to: '/policies' },
+  { label: 'Compliance', to: '/compliance' },
   { label: 'Register', to: '/register' },
 ];
 

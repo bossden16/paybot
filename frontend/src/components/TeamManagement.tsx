@@ -116,7 +116,7 @@ function RevokeConfirmDialog({
             <AlertTriangle className="h-5 w-5 text-red-500" />
           </div>
           <div>
-            <p className="font-semibold text-slate-900 text-sm">Revoke Invitation</p>
+            <p className="font-semibold text-foreground text-sm">Revoke Invitation</p>
             <p className="text-xs text-slate-500 mt-0.5 break-all">{email}</p>
           </div>
         </div>
@@ -230,7 +230,7 @@ export function TeamInvitationsTab() {
       <Card className="bg-white border border-slate-200">
         <CardHeader className="pb-3 border-b border-slate-100">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+            <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
               Send Team Invitation
             </CardTitle>
@@ -327,7 +327,7 @@ export function TeamInvitationsTab() {
       {/* Invitations List */}
       <Card className="bg-white border border-slate-200">
         <CardHeader className="pb-3 border-b border-slate-100">
-          <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Mail className="h-4 w-4" />
             Pending Invitations
           </CardTitle>
@@ -349,7 +349,7 @@ export function TeamInvitationsTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Mail className="h-4 w-4 text-slate-500 flex-shrink-0" />
-                      <p className="text-sm font-medium text-slate-900">{inv.email}</p>
+                      <p className="text-sm font-medium text-foreground">{inv.email}</p>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                         inv.status === 'pending'
                           ? 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -440,7 +440,7 @@ export function TeamMembersTab() {
   return (
     <Card className="bg-white border border-slate-200">
       <CardHeader className="pb-3 border-b border-slate-100">
-        <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Users className="h-4 w-4" />
           Active Team Members
         </CardTitle>
@@ -472,7 +472,7 @@ export function TeamMembersTab() {
             {members.map((member) => (
               <div key={member.id} className="p-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900">{member.name}</p>
+                  <p className="text-sm font-medium text-foreground">{member.name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">@{member.telegram_id}</p>
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 mt-2">
                     <Shield className="h-3 w-3" />
