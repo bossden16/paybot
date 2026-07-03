@@ -376,7 +376,13 @@ export default function DeveloperExperience() {
     window.crypto.getRandomValues(bytes);
     const random = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     const scopeTag = selectedScopes.map((s) => SCOPE_TAGS[s] || 'x').sort().join('');
-    const ts = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+    const ts = new Date().toISOString()
+      .replace(/-/g, '')
+      .replace(/:/g, '')
+      .replace(/\./g, '')
+      .replace(/T/g, '')
+      .replace(/Z/g, '')
+      .slice(0, 14);
     const prefix = (keyName.trim() || serviceName.trim() || 'xend').toLowerCase().replace(/\s+/g, '_');
     setConfigKey(`payment_api_key_${scopeTag}_${ts}`);
     setConfigValue(`${prefix}_live_${scopeTag}_${random}`);

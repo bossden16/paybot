@@ -27,7 +27,19 @@ services:
         sync: false
       - key: PAYMONGO_PUBLIC_KEY
         sync: false
+      - key: MAGPIE_API_KEY
+        sync: false
+      - key: MAGPIE_WEBHOOK_SECRET
+        sync: false
+      - key: MAGPIE_MODE
+        value: sandbox
+      - key: MAGPIE_BASE_URL
+        sync: false
       - key: DATABASE_URL
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOWED_ORIGINS
         sync: false
 
 # Managed database for the service. After creation, copy the connection string into the

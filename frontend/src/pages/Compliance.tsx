@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileCheck, ShieldCheck, Certificate, Sparkles, Archive, Globe } from 'lucide-react';
+import { FileCheck, ShieldCheck, Award, Sparkles, Archive, Globe } from 'lucide-react';
 import { APP_NAME, COMPANY_NAME } from '@/lib/brand';
 
 const certificates = [
@@ -111,7 +111,7 @@ export default function Compliance() {
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="h-11 w-11 rounded-3xl bg-white/10 grid place-items-center text-sky-200">
-                    <Certificate className="h-5 w-5" />
+                    <Award className="h-5 w-5" />
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-[0.24em] text-sky-200/80">{certificate.badge}</p>

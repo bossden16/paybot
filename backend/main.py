@@ -167,14 +167,15 @@ async def lifespan(app: FastAPI):
             "invalidated on restart. Set JWT_SECRET_KEY for production use."
         )
 
-    # Magpie is the primary payment gateway - enforce in production.
+    # Magpie is the primary payment gateway, but do not hard-fail startup during
+    # deployment if the credential is not yet configured. The app can still boot
+    # and expose a clear runtime error through the health/ping endpoints.
     if not settings.magpie_api_key:
         message = "MAGPIE_API_KEY is not configured. Magpie-based payment features require this credential."
         if environment == "dev":
             logger.warning(message)
         else:
-            logger.critical(message)
-            sys.exit(1)
+            logger.warning(message)
 
     # MODULE_STARTUP_START
     db_ready = False
