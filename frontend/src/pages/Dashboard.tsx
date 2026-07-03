@@ -307,7 +307,7 @@ export default function Dashboard() {
         {/* PHP Wallet */}
         <Link to="/wallet" className="block group">
           <Card className="card-3d h-full bg-white border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-lg cursor-pointer overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-transparent opacity-30 group-hover:opacity-100 transition-opacity duration-300" />
             <CardContent className="p-5 relative">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wider group-hover:text-slate-600 transition-colors">PHP Wallet</span>
@@ -332,7 +332,7 @@ export default function Dashboard() {
         {/* USD Wallet */}
         <Link to="/wallet" className="block group">
           <Card className="card-3d h-full bg-white border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-lg cursor-pointer overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-30 group-hover:opacity-100 transition-opacity duration-300" />
             <CardContent className="p-5 relative">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wider group-hover:text-slate-600 transition-colors">USDT Wallet</span>
@@ -556,7 +556,7 @@ export default function Dashboard() {
                         <span className="text-sm font-semibold text-foreground">
                           ₱{fmt(txn.amount)}
                         </span>
-                        <span className={`${sc.bg} ${sc.text} ${sc.border} border text-[10px] transition-all duration-500 hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
+                        <span className={`${sc.bg} ${sc.text} ${sc.border} border text-[10px] transition-all duration-500 inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
                           isUpdated ? 'ring-2 ring-current' : ''
                         }`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
