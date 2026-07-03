@@ -191,7 +191,7 @@ export default function HomePage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <FeatureCard icon={CreditCard} color="text-blue-400" bg="bg-blue-500/10"
             title="Multi-Method Payments"
-            description="Accept GCash, Maya, GrabPay, virtual accounts, QR codes, e-wallets, and international wallets like Alipay & WeChat Pay." />
+            description="Accept local e-wallets, QR payments, and digital invoicing through our Magpie-powered checkout experience." />
           <FeatureCard icon={Send} color="text-purple-400" bg="bg-purple-500/10"
             title="Instant Disbursements"
             description="Send payouts to any Philippine bank or e-wallet in seconds. Batch disbursements supported for enterprise payroll." />

@@ -50,24 +50,9 @@ async def deployment_status():
             "configured": bool(settings.telegram_bot_token),
             "username": settings.telegram_bot_username or None,
         },
-        "xendit": {
-            "configured": bool(settings.xendit_secret_key),
-        },
         "magpie": {
             "configured": bool(settings.magpie_api_key),
             "mode": settings.magpie_mode,
-        },
-        "photonpay": {
-            "configured": bool(
-                settings.photonpay_app_id
-                and settings.photonpay_app_secret
-                and settings.photonpay_site_id
-            ),
-            "mode": settings.photonpay_mode,
-        },
-        "transfi": {
-            "configured": bool(settings.transfi_api_key),
-            "mode": settings.transfi_mode,
         },
     }
 

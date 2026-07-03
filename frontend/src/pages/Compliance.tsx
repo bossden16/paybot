@@ -22,7 +22,7 @@ const certificates = [
     issuedOn: 'February 23, 2019',
     expiresOn: 'No Expiry',
     description:
-      'Official SEC registration for Xendit Philippines, Inc., authorizing corporate operations under Philippine corporate law.',
+      'Official SEC registration for the operating entity, authorizing corporate operations under Philippine corporate law.',
     badge: 'Corporate Registration',
   },
   {
@@ -32,7 +32,7 @@ const certificates = [
     issuedOn: 'November 15, 2019',
     expiresOn: 'Active',
     description:
-      'Tax registration for Xendit Philippines, Inc. as a domestic corporation, enabling compliant transaction reporting and tax filings.',
+      'Tax registration for the operating entity as a domestic corporation, enabling compliant transaction reporting and tax filings.',
     badge: 'Tax Compliance',
   },
 ];

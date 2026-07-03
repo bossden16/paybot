@@ -546,7 +546,7 @@ export default function Login() {
             <div className="relative">
               <div className="mb-4 sm:mb-5">
                 <h3 className="text-lg sm:text-xl font-bold text-[#141414] mb-1">Philippine E-Wallets</h3>
-                <p className="text-[#595959] text-sm">Accept from all major Philippine digital wallets via PayMongo.</p>
+                <p className="text-[#595959] text-sm">Accept major Philippine digital wallets and QR-based payments through the Magpie checkout flow.</p>
               </div>
               <RevealGroup className="flex flex-wrap gap-3 sm:gap-4 mb-5 sm:mb-6">
                 {[
@@ -564,7 +564,7 @@ export default function Login() {
               </RevealGroup>
               <ul className="grid sm:grid-cols-2 gap-2">
                 {[
-                  'E-wallet checkout via PayMongo',
+                  'E-wallet checkout via Magpie',
                   '70M+ GCash users',
                   '30M+ Maya users',
                   'GrabPay ecosystem integration',

@@ -109,7 +109,7 @@ const PLANS: Plan[] = [
     ctaCls: 'bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.12] text-slate-200 hover:text-white',
     features: [
       'Telegram bot access',
-      'GCash & Maya e-wallet',
+      'GCash and local e-wallet support',
       'QR code payments',
       'Real-time Telegram alerts',
       'Transaction history',
@@ -139,9 +139,7 @@ const PLANS: Plan[] = [
     features: [
       'Everything in Starter',
       'Opening deposit: 600 USDT or ₱30,000',
-      'Xendit transaction fees apply (see table below)',
-      'Alipay QR collection',
-      'WeChat Pay QR collection',
+      'Magpie transaction fees apply (see table below)',
       'All PH banks via InstaPay / PESONet',
       'GrabPay support',
       'Disbursements to any PH bank',

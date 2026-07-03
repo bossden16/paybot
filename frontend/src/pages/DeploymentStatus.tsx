@@ -34,20 +34,14 @@ interface DeploymentData {
   services: {
     database: ServiceStatus;
     telegram: ServiceStatus;
-    xendit: ServiceStatus;
-    paymongo: ServiceStatus;
-    photonpay: ServiceStatus;
-    transfi: ServiceStatus;
+    magpie: ServiceStatus;
   };
 }
 
 const SERVICE_META: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
   database:  { label: 'Database',   icon: <Database className="h-5 w-5" />,   description: 'PostgreSQL / SQLite connection' },
   telegram:  { label: 'Telegram',   icon: <Bot className="h-5 w-5" />,         description: 'Telegram Bot API token' },
-  xendit:    { label: 'Xendit',     icon: <CreditCard className="h-5 w-5" />,  description: 'Xendit payment gateway (PH)' },
-  paymongo:  { label: 'PayMongo',   icon: <CreditCard className="h-5 w-5" />,  description: 'PayMongo payment gateway' },
-  photonpay: { label: 'PhotonPay',  icon: <Globe className="h-5 w-5" />,       description: 'Alipay / WeChat Pay (via PhotonPay)' },
-  transfi:   { label: 'TransFi',    icon: <Globe className="h-5 w-5" />,       description: 'USDT / crypto payment gateway' },
+  magpie:    { label: 'Magpie',     icon: <CreditCard className="h-5 w-5" />,  description: 'Primary payment collection gateway' },
 };
 
 function StatusIcon({ ok, size = 'sm' }: { ok: boolean; size?: 'sm' | 'lg' }) {
