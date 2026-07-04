@@ -128,10 +128,33 @@ async def create_checkout_session(
     try:
         res = await svc.create_session(payload=payload)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        res = {"success": False, "error": str(exc)}
 
     if not res.get("success"):
-        raise HTTPException(status_code=400, detail=res.get("error", "Failed to create session"))
+        # Magpie's checkout-session endpoint can return a generic 500 even when the
+        # underlying checkout flow is available. Fall back to the checkout endpoint.
+        fallback = await svc.create_checkout(
+            amount=amount,
+            description=data.description or "Checkout session",
+            external_id=payload.get("external_id", f"magpie-session-{uuid.uuid4().hex[:12]}"),
+            customer_name="",
+            customer_email=data.customer_email or "",
+            metadata={
+                **(data.metadata or {}),
+                "descriptor": data.description or "",
+                "merchant_name": "",
+                "source": "magpie_legacy_checkout_session_fallback",
+            },
+        )
+        if not fallback.get("success"):
+            raise HTTPException(status_code=400, detail=fallback.get("error", "Failed to create session"))
+        res = {
+            "success": True,
+            "session_id": fallback.get("checkout_id", ""),
+            "payment_url": fallback.get("checkout_url", ""),
+            "external_id": fallback.get("external_id", payload.get("external_id", "")),
+            "raw": fallback,
+        }
 
     # Record transaction
     txn_svc = TransactionsService(db)

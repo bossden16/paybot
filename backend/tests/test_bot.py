@@ -936,6 +936,51 @@ class TestCheckoutSessionPayloads:
         assert captured.get("amount") == 25.0
         assert captured.get("line_items", [{}])[0].get("amount") == 2500
 
+    def test_checkout_session_falls_back_to_checkout_when_session_endpoint_fails(self, client, auth_headers):
+        captured: dict = {}
+
+        async def fake_create_session(self, *, payload):
+            return {"success": False, "error": 'Magpie API error (500): {"message": "Internal server error"}'}
+
+        async def fake_create_checkout(self, **kwargs):
+            captured.update(kwargs)
+            return {
+                "success": True,
+                "checkout_id": "checkout-456",
+                "checkout_url": "https://example.com/checkout/456",
+                "external_id": kwargs.get("external_id", "checkout-ext-456"),
+            }
+
+        async def fake_create_transaction(self, *args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(id=567)
+
+        with patch("services.magpie_service.MagpieService.create_session", new=fake_create_session), patch(
+            "services.magpie_service.MagpieService.create_checkout", new=fake_create_checkout
+        ), patch("routers.magpie.TransactionsService.create_transaction", new=fake_create_transaction):
+            r = client.post(
+                "/api/v1/magpie/checkout/sessions",
+                headers=auth_headers,
+                json={
+                    "payment_method_types": ["card", "gcash"],
+                    "line_items": [{"name": "Consulting", "amount": 2500, "quantity": 1}],
+                    "mode": "payment",
+                    "success_url": "https://example.com/success",
+                    "cancel_url": "https://example.com/cancel",
+                    "currency": "php",
+                    "customer_email": "test@example.com",
+                    "description": "Checkout session",
+                },
+            )
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["success"] is True
+        assert body["data"]["checkout_id"] == "checkout-456"
+        assert captured.get("amount") == 25.0
+        assert captured.get("description") == "Checkout session"
+
 
 class TestXenditCollectionFallback:
     def test_create_invoice_falls_back_to_magpie_when_xendit_fails(self, client, auth_headers):
