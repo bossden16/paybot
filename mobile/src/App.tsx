@@ -22,7 +22,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useTheme, COLORS } from './theme';
 import { View, ActivityIndicator } from 'react-native';
 
-import DeviceInfo from 'react-native-device-info';
 import { API_URL } from './config';
 
 const Stack = createNativeStackNavigator();
@@ -144,44 +143,17 @@ const RootNavigator = () => {
   const { isLoggedIn, user, isLoading } = useAuth();
   const { isDark, colors, common } = useTheme();
 
-  // Auto-register device when logged in
   useEffect(() => {
-    const registerDevice = async () => {
+    const syncAuthState = async () => {
       if (isLoggedIn && user) {
         try {
-          const token = await AsyncStorage.getItem('auth_token');
-          const deviceId = await DeviceInfo.getUniqueId();
-          const deviceName = await DeviceInfo.getDeviceName();
-          const model = await DeviceInfo.getModel();
-          const systemVersion = await DeviceInfo.getSystemVersion();
-
-          // 1. Register/Heartbeat device
-          const regRes = await fetch(`${API_URL}/pos-terminals/devices/register`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              device_id: deviceId,
-              device_name: deviceName,
-              model: model,
-              system_version: systemVersion,
-              app_version: DeviceInfo.getVersion(),
-            }),
-          });
-
-          const regData = await regRes.json();
-          console.log('Device registration status:', regData.message);
-
-          // 2. If not linked to a terminal, we could potentially auto-assign if backend supports it
-          // For now, registration ensures the device exists in the database for the admin to see.
+          await AsyncStorage.getItem('auth_token');
         } catch (e) {
-          console.warn('Failed to auto-register device', e);
+          console.warn('Failed to sync auth state', e);
         }
       }
     };
-    registerDevice();
+    syncAuthState();
   }, [isLoggedIn, user]);
 
   const theme = React.useMemo(() => {

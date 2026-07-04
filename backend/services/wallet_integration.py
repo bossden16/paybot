@@ -5,7 +5,6 @@ from sqlalchemy import select
 
 from models.wallets import Wallets
 from models.wallet_transactions import Wallet_transactions
-from models.pos_terminal import POSTerminalTransaction
 from services.event_bus import event_bus
 
 logger = logging.getLogger(__name__)

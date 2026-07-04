@@ -25,10 +25,9 @@ export const SettingsScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const terminalId = await AsyncStorage.getItem('terminal_id');
       const token = await AsyncStorage.getItem('auth_token');
 
-      const response = await fetch(`${Config.API_BASE_URL}/pos-terminals/${terminalId}/pin/set`, {
+      const response = await fetch(`${Config.API_BASE_URL}/wallet/pin/set`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

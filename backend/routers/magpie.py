@@ -3,6 +3,7 @@
 Keeps old /api/v1/magpie endpoints working by forwarding to the xend router logic.
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 import uuid
 from pydantic import BaseModel, Field
@@ -15,6 +16,8 @@ from schemas.auth import UserResponse
 from services.magpie_service import MagpieService
 from services.transactions import TransactionsService
 from routers import xend
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/magpie", tags=["magpie-legacy"])
 
@@ -110,27 +113,37 @@ async def create_checkout_session(
     if not amount or amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be provided and > 0")
 
-    payload = {
-        "payment_method_types": data.payment_method_types or [],
-        "line_items": data.line_items or [],
-        "mode": data.mode,
-        "success_url": data.success_url,
-        "cancel_url": data.cancel_url,
-        "currency": data.currency,
-        "customer_email": data.customer_email,
-        "external_id": data.external_id or f"magpie-session-{uuid.uuid4().hex[:12]}",
-        "description": data.description,
-        "metadata": data.metadata or {},
+    payload: Dict[str, Any] = {
         "amount": amount,
+        "currency": data.currency,
+        "external_id": data.external_id or f"magpie-session-{uuid.uuid4().hex[:12]}",
     }
+    if data.payment_method_types:
+        payload["payment_method_types"] = data.payment_method_types
+    if data.line_items:
+        payload["line_items"] = data.line_items
+    if data.mode:
+        payload["mode"] = data.mode
+    if data.success_url:
+        payload["success_url"] = data.success_url
+    if data.cancel_url:
+        payload["cancel_url"] = data.cancel_url
+    if data.customer_email:
+        payload["customer_email"] = data.customer_email
+    if data.description:
+        payload["description"] = data.description
+    if data.metadata:
+        payload["metadata"] = data.metadata
 
     # Create session via service
     try:
         res = await svc.create_session(payload=payload)
     except Exception as exc:
+        logger.warning("Magpie checkout session request failed: %s", exc)
         res = {"success": False, "error": str(exc)}
 
     if not res.get("success"):
+        logger.warning("Magpie checkout session failed, falling back to create_checkout: %s", res.get("error"))
         # Magpie's checkout-session endpoint can return a generic 500 even when the
         # underlying checkout flow is available. Fall back to the checkout endpoint.
         fallback = await svc.create_checkout(

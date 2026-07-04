@@ -11,7 +11,6 @@ import {
   ChevronRight, Zap, Bell, CheckCircle, XCircle, Clock, Bot,
   MessageSquare, ArrowUpFromLine, DollarSign, ClipboardList,
   ChevronDown, Lock, FileCheck, AlertCircle, Sparkles, Code2, BookOpen,
-  MonitorSmartphone,
 } from 'lucide-react';
 import { APP_NAME } from '@/lib/brand';
 import '../styles/dashboard-enhancements.css';
@@ -50,7 +49,6 @@ const userNavItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   { label: 'KYB Registrations', icon: ClipboardList, path: '/kyb-registrations' },
   { label: 'KYC Verifications', icon: ShieldCheck, path: '/kyc-verifications' },
-  { label: 'POS Terminal Requests', icon: MonitorSmartphone, path: '/pos-terminals' },
   { label: 'Top-up Requests', icon: DollarSign, path: '/topup-requests' },
   { label: 'USDT Requests', icon: Send, path: '/usdt-send-requests' },
   { label: 'Bank Deposits', icon: ArrowUpFromLine, path: '/bank-deposits' },

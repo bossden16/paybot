@@ -29,9 +29,6 @@ from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from models.auth import User
 from models.admin_users import AdminUser
 from models.bot_settings import Bot_settings
-from models.pos_terminal import POSTerminal, POSTerminalDevice, TerminalStatus
-from services.pos_terminal import POSTerminalService
-from schemas.pos_terminal import POSTerminalDeviceCreate
 from models.kyb_registrations import KybRegistration
 from schemas.auth import (
     PlatformTokenExchangeRequest,
@@ -217,54 +214,6 @@ async def _verify_turnstile_token(token: str, secret_key: str, remote_ip: Option
     except Exception as exc:
         logger.error("[_verify_turnstile_token] Request failed: %s", exc)
         return False
-
-
-async def _handle_auto_device_assignment(db: AsyncSession, user_id: str, device_id: Optional[str]) -> tuple[Optional[int], bool]:
-    """Auto-assign a device to a terminal for the given user."""
-    if not device_id:
-        return None, False
-
-    try:
-        pos_service = POSTerminalService(db)
-        
-        # Register device if not exists
-        await pos_service.register_device(POSTerminalDeviceCreate(
-            device_id=device_id,
-            brand="Mobile",
-            model="Auto-Assigned",
-        ))
-        
-        # Check if terminal already exists for this device
-        res = await db.execute(
-            select(POSTerminal).where(POSTerminal.device_id == device_id)
-        )
-        terminal = res.scalar_one_or_none()
-        
-        if not terminal:
-            # Auto-assign: create new terminal
-            assign_res = await pos_service.assign_device(device_id, user_id)
-            if assign_res.get("success"):
-                terminal_id = assign_res.get("terminal_id")
-                # Re-fetch terminal to get the full object
-                terminal = await pos_service.get_terminal_by_id(terminal_id)
-                logger.info(f"Auto-assigned terminal {terminal_id} to user {user_id} for device {device_id}")
-        else:
-            # Terminal exists, ensure it's assigned to this user if not already
-            if terminal.user_id != user_id:
-                terminal.user_id = user_id
-                terminal.status = TerminalStatus.ACTIVE
-                await db.commit()
-                logger.info(f"Re-assigned terminal {terminal.id} to user {user_id} for device {device_id}")
-
-        if terminal:
-            terminal.last_device_id = device_id
-            terminal.authorized_at = datetime.utcnow()
-            await db.commit()
-            return terminal.id, bool(terminal.operator_pin)
-    except Exception as e:
-        logger.error(f"Error during auto device assignment: {e}")
-    
-    return None, False
 
 
 @router.post("/telegram-login", response_model=TokenExchangeResponse)
@@ -501,9 +450,6 @@ async def telegram_login_widget(payload: TelegramWidgetLoginRequest, request: Re
     )
 
     logger.info("[telegram-login-widget] Bot admin authenticated: %s", telegram_user_id)
-    
-    # Auto-assign device if provided
-    terminal_id, has_pin = await _handle_auto_device_assignment(db, telegram_user_id, payload.device_id)
 
     # Set a short-lived cookie to mark Turnstile verification for this session
     try:
@@ -512,7 +458,7 @@ async def telegram_login_widget(payload: TelegramWidgetLoginRequest, request: Re
         response.set_cookie(key="turnstile_verified", value="1", httponly=True, secure=secure, max_age=86400, path="/")
     except Exception:
         pass
-    return TokenExchangeResponse(token=app_token, user=user_resp, terminal_id=terminal_id, has_pin=has_pin)
+    return TokenExchangeResponse(token=app_token, user=user_resp)
 
 
 class TurnstileVerifyRequest(BaseModel):
@@ -812,6 +758,7 @@ async def telegram_debug():
     return debug_info
 
 
+@router.post("/login", response_model=LoginResponse)
 @router.post("/terminal-login", response_model=LoginResponse)
 async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Secure login for mobile POS clients with device binding."""
@@ -832,9 +779,6 @@ async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
-
-    # Secure Device Binding with Auto-Assignment
-    terminal_id, has_pin = await _handle_auto_device_assignment(db, authenticated_user.id, payload.device_id)
 
     auth_service = AuthService(db)
     # Inject device_id into JWT claims for verification on every request
@@ -901,10 +845,8 @@ async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)
     )
 
     return LoginResponse(
-        access_token=app_token, 
-        user=user_resp, 
-        terminal_id=terminal_id,
-        has_pin=has_pin
+        access_token=app_token,
+        user=user_resp,
     )
 
 

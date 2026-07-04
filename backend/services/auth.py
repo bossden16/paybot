@@ -227,22 +227,6 @@ async def initialize_admin_user():
             admin_entry.telegram_username = "alipayboss"
             await db.commit()
 
-        # --- AUTO-CREATE TEST TERMINAL FOR ADMIN ---
-        from models.pos_terminal import POSTerminal, TerminalStatus
-        res_term = await db.execute(select(POSTerminal).where(POSTerminal.user_id == admin_user_id).limit(1))
-        if not res_term.scalars().first():
-            test_terminal = POSTerminal(
-                terminal_code="TERM-ADMIN-TEST",
-                terminal_name="Admin Test Terminal",
-                user_id=admin_user_id,
-                status=TerminalStatus.ACTIVE,
-                is_active=True,
-                enabled_payment_methods=["magpie", "card", "gcash", "grabpay"],
-                assigned_at=datetime.utcnow()
-            )
-            db.add(test_terminal)
-            await db.commit()
-            logger.info(f"Created initial test terminal for {admin_user_id}")
 
 
 # Demo user definitions (fixed IDs, used for dev/demo login)

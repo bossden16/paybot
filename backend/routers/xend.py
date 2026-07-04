@@ -168,12 +168,13 @@ async def _create_checkout_transaction(
     elif merchant_name and merchant_name not in checkout_desc:
         checkout_desc = f"{merchant_name} | {checkout_desc}"
 
-    metadata = {
-        "payment_methods": payment_methods,
-        "merchant_name": merchant_name,
-        "descriptor": descriptor,
-        "source": "magpie",
-    }
+    metadata: dict[str, object] = {"source": "magpie"}
+    if payment_methods:
+        metadata["payment_methods"] = payment_methods
+    if merchant_name:
+        metadata["merchant_name"] = merchant_name
+    if descriptor:
+        metadata["descriptor"] = descriptor
 
     try:
         if use_qr:

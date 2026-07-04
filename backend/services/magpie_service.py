@@ -41,18 +41,28 @@ class MagpieService:
             return {"success": False, "error": "MAGPIE_API_KEY not configured"}
 
         url = f"{self.base_url}{path}"
+        logger.debug("Magpie request %s payload=%s", url, payload)
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(url, json=payload, headers=self._headers())
+            response_text = resp.text or ""
             if resp.status_code >= 400:
+                logger.warning(
+                    "Magpie API error %s %s payload=%s response=%s",
+                    resp.status_code,
+                    url,
+                    payload,
+                    response_text,
+                )
                 return {
                     "success": False,
-                    "error": f"Magpie API error ({resp.status_code}): {resp.text}",
+                    "error": f"Magpie API error ({resp.status_code}): {response_text}",
                 }
-            data = resp.json() if resp.text else {}
+            data = resp.json() if response_text else {}
+            logger.debug("Magpie response %s payload=%s data=%s", url, payload, data)
             return {"success": True, "data": data}
         except Exception as exc:
-            logger.error("Magpie request failed: %s", exc, exc_info=True)
+            logger.error("Magpie request failed: %s payload=%s", exc, payload, exc_info=True)
             return {"success": False, "error": str(exc)}
 
     @staticmethod
@@ -100,16 +110,24 @@ class MagpieService:
         external_id: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        payload = {
+        payload: Dict[str, Any] = {
             "amount": amount,
             "description": description,
-            "descriptor": descriptor,
-            "merchant_name": merchant_name,
-            "customer_name": customer_name,
-            "customer_email": customer_email,
             "external_id": external_id,
-            "metadata": metadata or {},
+            "currency": "php",
         }
+        if descriptor:
+            payload["descriptor"] = descriptor
+        if merchant_name:
+            payload["merchant_name"] = merchant_name
+        if customer_name:
+            payload["customer_name"] = customer_name
+        if customer_email:
+            payload["customer_email"] = customer_email
+        cleaned_metadata = {k: v for k, v in (metadata or {}).items() if v not in (None, "", [], {})}
+        if cleaned_metadata:
+            payload["metadata"] = cleaned_metadata
+
         result = await self._post("/v1/payments/checkout", payload)
         if not result.get("success"):
             return result

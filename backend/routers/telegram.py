@@ -29,7 +29,6 @@ from services.magpie_service import MagpieService
 from services.event_bus import payment_event_bus
 from services.photonpay_service import PhotonPayService
 from services.bot_settings import Bot_settingsService
-from services.pos_terminal import POSTerminalService
 from services.wallets import WalletsService
 from services.app_settings import get_usdt_php_rate, get_usdt_trc20_address
 from models.topup_requests import TopupRequest
@@ -328,11 +327,6 @@ _CMD_STEPS: Dict[str, List[Dict]] = {
         {"key": "id",     "type": "str",   "prompt": "🆔 Enter the <b>transaction ID</b> to refund:\n<i>e.g. INV-xxx</i>"},
         {"key": "amount", "type": "float", "prompt": "💰 Enter the <b>refund amount</b> in PHP:\n<i>e.g. 500</i>"},
     ],
-    "/pos": [
-        {"key": "amount",         "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
-        {"key": "description",    "type": "str",   "prompt": "📝 Enter the <b>description</b>:\n<i>e.g. Retail Sale</i>\n\nOr type <code>skip</code> to use the default.", "optional": True, "default": "POS Sale"},
-        {"key": "terminal_code",  "type": "str",   "prompt": "🔢 Enter the <b>Terminal Code</b> to push this transaction to:\n\nOr type <code>skip</code> to use your active terminal.", "optional": True, "default": "AUTO"},
-    ],
     "/send": [
         {"key": "recipient", "type": "str",   "prompt": "👤 Enter the <b>recipient</b> (username or Telegram ID):\n<i>e.g. @username</i>"},
         {"key": "amount",    "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
@@ -439,14 +433,11 @@ def _welcome_en(name: str = "") -> str:
     return (
         f"👋 <b>xend Philippines ✅</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"{greeting} Your all-in-one payment terminal is ready.\n\n"
+        f"{greeting} Your payment workspace is ready.\n\n"
         f"💳 <b>Accept Payments</b>\n"
         f"  /invoice — Create invoice link\n"
-        f"  /pos — Push to Terminal (Tap to Phone)\n"
         f"  /qr — Generate a QR code\n"
         f"  /link — Shareable link\n\n"
-        f"📟 <b>Terminals</b>\n"
-        f"  /terminal — Manage active POS devices\n\n"
         f"💰 <b>Wallet</b>\n"
         f"  /wallet — Check balance & history\n"
         f"  /send [to] [amt] — Transfer PHP to user\n"
@@ -460,14 +451,11 @@ def _welcome_zh(name: str = "") -> str:
     return (
         f"👋 <b>xend Philippines ✅</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"{greeting} 您的一站式支付终端已就绪。\n\n"
+        f"{greeting} 您的支付工作台已就绪。\n\n"
         f"💳 <b>收款功能</b>\n"
         f"  /invoice — 创建账单链接\n"
-        f"  /pos — 终端支付 (Tap to Phone)\n"
         f"  /qr — 生成二维码\n"
         f"  /link — 分享付款链接\n\n"
-        f"📟 <b>终端管理</b>\n"
-        f"  /terminal — 管理您的 POS 设备\n\n"
         f"💰 <b>我的钱包</b>\n"
         f"  /wallet — 查看余额与历史\n"
         f"  /send [接收方] [金额] — 转账 PHP\n"
@@ -1849,72 +1837,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 return {"status": "ok"}
 
             if cmd == "/pos":
-                try:
-                    amount = float(collected.get("amount", 0))
-                    description = collected.get("description", "POS Sale")
-                    terminal_code = collected.get("terminal_code", "AUTO")
-
-                    if amount <= 0:
-                        await tg.send_message(chat_id, "❌ Amount must be greater than zero.")
-                        return {"status": "ok"}
-
-                    pos_service = POSTerminalService(db)
-
-                    # Try to find the terminal
-                    terminal = None
-                    if terminal_code != "AUTO":
-                        terminal = await pos_service.get_terminal_by_code(terminal_code)
-                    else:
-                        # Find the first active terminal for this user
-                        terminals, _ = await pos_service.list_user_terminals(f"tg-{chat_id}", page=1, per_page=1)
-                        if terminals:
-                            terminal = terminals[0]
-
-                    if not terminal:
-                        await tg.send_message(chat_id, "❌ No active terminal found to push this transaction to.")
-                        return {"status": "ok"}
-
-                    # Push to terminal (ECR Push)
-                    order_id = f"pos-{uuid.uuid4().hex[:12]}"
-                    from models.pos_terminal import POSTerminalTransaction
-                    from services.event_bus import event_bus
-
-                    txn = POSTerminalTransaction(
-                        terminal_id=terminal.id,
-                        user_id=f"tg-{chat_id}",
-                        order_id=order_id,
-                        description=description,
-                        amount=int(amount * 100),
-                        currency="PHP",
-                        payment_method="awaiting_tap",
-                        status="pending",
-                    )
-                    db.add(txn)
-                    await db.commit()
-
-                    # Emit event to wake up the physical terminal
-                    await event_bus.emit("ecr_push", {
-                        "terminal_id": terminal.id,
-                        "device_id": terminal.device_id,
-                        "order_id": order_id,
-                        "amount": amount,
-                        "description": description
-                    })
-
-                    reply = (
-                        f"📲 <b>Transaction Pushed to Terminal</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📟 Terminal: <b>{terminal.terminal_name}</b> (<code>{terminal.terminal_code}</code>)\n"
-                        f"💰 Amount: <b>₱{amount:,.2f}</b>\n"
-                        f"📝 {description}\n"
-                        f"🆔 <code>{order_id}</code>\n\n"
-                        f"Please tap the card on your terminal app to complete the payment."
-                    )
-                    await tg.send_message(chat_id, reply)
-
-                except Exception as exc:
-                    logger.error(f"/pos wizard completion error: {exc}", exc_info=True)
-                    await tg.send_message(chat_id, "❌ An error occurred pushing your transaction. Please try again.")
+                await tg.send_message(chat_id, "⚠️ POS terminal payments are no longer supported in this build.")
                 return {"status": "ok"}
 
             # Other commands: rebuild command text and fall through to routing
@@ -3505,8 +3428,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 "🔗 /link [amt] [desc] — Payment Link\n"
                 "🏦 /va [amt] [bank] — Virtual Account\n"
                 "📲 /ewallet [amt] [provider] — E-Wallet\n"
-                "💳 /pos [amt] [desc] — Terminal POS payment\n"
-                "🔴 /alipay [amt] [desc] — Alipay QR (PhotonPay)\n"
+                " /alipay [amt] [desc] — Alipay QR (PhotonPay)\n"
                 "🟢 /wechat [amt] [desc] — WeChat QR (PhotonPay)\n"
                 "📷 /scanqr — Scan &amp; pay via QRPH\n\n"
                 "💡 Example: /invoice 500 Coffee order"
@@ -3515,115 +3437,17 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
 
         # ==================== /pos ====================
         elif text.startswith("/pos"):
-            parts = text.split(maxsplit=3)
-            if len(parts) < 2:
-                await tg.send_message(chat_id, _wizard_start(chat_id, "/pos"))
-            else:
-                try:
-                    amount = float(parts[1])
-                    description = parts[2] if len(parts) > 2 else "POS Sale"
-                    terminal_code = parts[3] if len(parts) > 3 else "AUTO"
-
-                    pos_service = POSTerminalService(db)
-                    terminal = None
-                    if terminal_code != "AUTO":
-                        terminal = await pos_service.get_terminal_by_code(terminal_code)
-                    else:
-                        terminals, _ = await pos_service.list_user_terminals(f"tg-{chat_id}", page=1, per_page=1)
-                        if terminals:
-                            terminal = terminals[0]
-
-                    if not terminal:
-                        await tg.send_message(chat_id, "❌ No active terminal found to push this transaction to.")
-                        return {"status": "ok"}
-
-                    # Push logic (same as wizard completion)
-                    order_id = f"pos-{uuid.uuid4().hex[:12]}"
-                    from models.pos_terminal import POSTerminalTransaction
-                    from services.event_bus import event_bus
-
-                    txn = POSTerminalTransaction(
-                        terminal_id=terminal.id, user_id=f"tg-{chat_id}",
-                        order_id=order_id, description=description,
-                        amount=int(amount * 100), currency="PHP",
-                        payment_method="awaiting_tap", status="pending",
-                    )
-                    db.add(txn)
-                    await db.commit()
-
-                    await event_bus.emit("ecr_push", {
-                        "terminal_id": terminal.id, "device_id": terminal.device_id,
-                        "order_id": order_id, "amount": amount, "description": description
-                    })
-
-                    reply = (
-                        f"📲 <b>Transaction Pushed to Terminal</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📟 Terminal: <b>{terminal.terminal_name}</b> (<code>{terminal.terminal_code}</code>)\n"
-                        f"💰 Amount: <b>₱{amount:,.2f}</b>\n"
-                        f"📝 {description}\n"
-                        f"🆔 <code>{order_id}</code>\n\n"
-                        f"Please tap the card on your terminal app to complete the payment."
-                    )
-                    await tg.send_message(chat_id, reply)
-                except ValueError:
-                    await tg.send_message(chat_id, "❌ Invalid amount.")
-                except Exception as e:
-                    logger.error(f"/pos command error: {e}", exc_info=True)
-                    await tg.send_message(chat_id, "❌ Error processing command.")
+            await tg.send_message(chat_id, "⚠️ POS terminal payments are no longer supported in this build.")
             return {"status": "ok"}
 
         # ==================== /terminal ====================
         elif text.startswith("/terminal"):
-            try:
-                pos_service = POSTerminalService(db)
-                terminals, _ = await pos_service.list_user_terminals(f"tg-{chat_id}")
-                if not terminals:
-                    await tg.send_message(chat_id, "📟 <b>No Terminals Found</b>\n\nYou don't have any POS terminals assigned yet. Contact your administrator to request one.")
-                else:
-                    lines = ["📟 <b>Your POS Terminals</b>\n━━━━━━━━━━━━━━━━━━━━"]
-                    for t in terminals:
-                        status_emoji = "✅" if t.is_active else "❌"
-                        t0_badge = " [ULTRA T+0]" if t.is_t0_settlement else ""
-                        lines.append(f"{status_emoji} <b>{t.terminal_name}</b>{t0_badge}\n   Code: <code>{t.terminal_code}</code>\n   Status: {t.status.upper()}")
-                    lines.append("\n💡 Use <code>/pos [amount]</code> to push a transaction to your terminal.\nUse /settlements to view pending payouts.")
-                    await tg.send_message(chat_id, "\n".join(lines))
-            except Exception as e:
-                logger.error(f"/terminal error: {e}", exc_info=True)
-                await tg.send_message(chat_id, "❌ Error fetching terminals.")
+            await tg.send_message(chat_id, "⚠️ POS terminal management is no longer available in this build.")
             return {"status": "ok"}
 
         # ==================== /settlements ====================
         elif text.startswith("/settlements"):
-            try:
-                from models.pos_terminal import POSTerminalTransaction
-                res = await db.execute(
-                    select(
-                        func.coalesce(func.sum(POSTerminalTransaction.amount), 0),
-                        func.count(POSTerminalTransaction.id)
-                    ).where(
-                        POSTerminalTransaction.user_id == f"tg-{chat_id}",
-                        POSTerminalTransaction.status == "completed"
-                    )
-                )
-                row = res.one()
-                total_cents = int(row[0] or 0)
-                count = int(row[1] or 0)
-                total_php = total_cents / 100.0
-
-                reply = (
-                    f"🏦 <b>Settlement Overview</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"💰 Total Processed: <b>₱{total_php:,.2f}</b>\n"
-                    f"🔢 Total Orders: <b>{count}</b>\n"
-                    f"⏳ Pending Clearing: <b>₱0.00</b>\n\n"
-                    f"✅ All funds have been cleared and credited to your PHP wallet.\n"
-                    f"💡 <i>Next clearing window: Today at 00:00 UTC</i>"
-                )
-                await tg.send_message(chat_id, reply)
-            except Exception as e:
-                logger.error(f"/settlements error: {e}", exc_info=True)
-                await tg.send_message(chat_id, "❌ Error fetching settlement data.")
+            await tg.send_message(chat_id, "⚠️ Settlement history is not available in this build.")
             return {"status": "ok"}
 
 
@@ -3636,10 +3460,8 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 "  /pay — Open payment menu\n"
                 "  /invoice — Create an invoice\n"
                 "  /qr — Generate a QR code\n"
-                "  /pos — Push to Terminal (Tap to Phone)\n"
                 "  /link — Shareable payment link\n\n"
-                "📟 <b>Terminal Management</b>\n"
-                "  /terminal — List your active terminals\n"
+                "📟 <b>Payments</b>\n"
                 "  /status [id] — Check payment status\n\n"
                 "💰 <b>Wallet & Transfers</b>\n"
                 "  /wallet — Wallet summary & balance\n"
@@ -3658,10 +3480,8 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 "  /pay — 打开收款菜单\n"
                 "  /invoice — 创建账单\n"
                 "  /qr — 生成二维码\n"
-                "  /pos — 终端支付 (Tap to Phone)\n"
                 "  /link — 可分享付款链接\n\n"
-                "📟 <b>终端管理</b>\n"
-                "  /terminal — 查看您的活跃终端\n"
+                "📟 <b>支付</b>\n"
                 "  /status [id] — 查询付款状态\n\n"
                 "💰 <b>钱包与转账</b>\n"
                 "  /wallet — 钱包摘要与余额\n"

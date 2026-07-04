@@ -24,7 +24,6 @@ import UsdtSendRequestsPage from './pages/UsdtSendRequestsPage';
 import BankDepositsPage from './pages/BankDepositsPage';
 import KybRegistrationsPage from './pages/KybRegistrationsPage';
 import KycVerificationsPage from './pages/KycVerificationsPage';
-import POSTerminalsPage from './pages/POSTerminalsPage';
 import RolesPage from './pages/RolesPage';
 import RequireSuperAdmin from './components/RequireSuperAdmin';
 import RequireDeveloperRole from './components/RequireDeveloperRole';
@@ -151,7 +150,6 @@ function AuthAwareShell() {
             <Route path="/bank-deposits" element={<RequireSuperAdmin><BankDepositsPage /></RequireSuperAdmin>} />
             <Route path="/kyb-registrations" element={<RequireSuperAdmin><KybRegistrationsPage /></RequireSuperAdmin>} />
             <Route path="/kyc-verifications" element={<RequireSuperAdmin><KycVerificationsPage /></RequireSuperAdmin>} />
-            <Route path="/pos-terminals" element={<RequireSuperAdmin><POSTerminalsPage /></RequireSuperAdmin>} />
             <Route path="/roles" element={<RequireSuperAdmin><RolesPage /></RequireSuperAdmin>} />
             <Route path="/policies" element={<Policies />} />
             <Route path="/compliance" element={<Compliance />} />
