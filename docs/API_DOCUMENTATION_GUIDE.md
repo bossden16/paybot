@@ -423,6 +423,7 @@ All routes below require bearer token authentication.
 - `POST /api/v1/xend/create-invoice`
 - `POST /api/v1/xend/create-payment-link`
 - `POST /api/v1/xend/create-qr-code`
+- `POST /api/v1/magpie/checkout/sessions`
 - `GET /api/v1/xend/payment-methods`
 - `GET /api/v1/xend/transaction-stats`
 
@@ -497,6 +498,27 @@ curl -X POST "http://localhost:8000/api/v1/xend/create-qr-code" \
 ```
 
 Use `data.qr_image_url` from response to render QR in your checkout UI.
+
+### 14.6 Create Checkout Session Example
+
+When using the Magpie-compatible checkout-session route, send an explicit `amount` field (or line items that resolve to one). The backend will forward it to Magpie as part of the session payload.
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/magpie/checkout/sessions" \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 2500,
+    "payment_method_types": ["card", "gcash", "maya"],
+    "line_items": [{"name": "Consulting", "amount": 250000, "quantity": 1}],
+    "mode": "payment",
+    "success_url": "https://your-app.example.com/magpie-success",
+    "cancel_url": "https://your-app.example.com/cancel",
+    "currency": "php",
+    "customer_email": "customer@example.com",
+    "description": "Consulting fee"
+  }'
+```
 
 ## 15) Web Frontend Integration Example
 

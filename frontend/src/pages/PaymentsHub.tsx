@@ -71,6 +71,7 @@ export default function PaymentsHub() {
         case 'checkout_session':
           endpoint = '/api/v1/magpie/checkout/sessions';
           payload = {
+            amount: amt,
             payment_method_types: ['card', 'gcash', 'maya'],
             line_items: [{ name: description || 'Payment', amount: Math.round(amt * 100), quantity: 1 }],
             mode: 'payment',

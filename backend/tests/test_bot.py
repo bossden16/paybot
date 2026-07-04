@@ -903,6 +903,40 @@ class TestMagpieTopUpIntegration:
         assert data["external_id"] == "maya-external-abc"
 
 
+class TestCheckoutSessionPayloads:
+    def test_checkout_session_includes_amount_in_magpie_payload(self, client, auth_headers):
+        captured: dict = {}
+
+        async def fake_create_session(self, *, payload):
+            captured.update(payload)
+            return {
+                "success": True,
+                "session_id": "session-123",
+                "payment_url": "https://example.com/pay",
+                "external_id": payload.get("external_id", "session-ext-123"),
+            }
+
+        with patch("services.magpie_service.MagpieService.create_session", new=fake_create_session):
+            r = client.post(
+                "/api/v1/magpie/checkout/sessions",
+                headers=auth_headers,
+                json={
+                    "payment_method_types": ["card", "gcash"],
+                    "line_items": [{"name": "Consulting", "amount": 2500, "quantity": 1}],
+                    "mode": "payment",
+                    "success_url": "https://example.com/success",
+                    "cancel_url": "https://example.com/cancel",
+                    "currency": "php",
+                    "customer_email": "test@example.com",
+                    "description": "Checkout session",
+                },
+            )
+
+        assert r.status_code == 200, r.text
+        assert captured.get("amount") == 25.0
+        assert captured.get("line_items", [{}])[0].get("amount") == 2500
+
+
 class TestXenditCollectionFallback:
     def test_create_invoice_falls_back_to_magpie_when_xendit_fails(self, client, auth_headers):
         async def fake_xendit_create_invoice(*args, **kwargs):

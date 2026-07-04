@@ -36,7 +36,7 @@ interface NavItem {
 
 const userNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Payments', icon: CreditCard, path: '/payments' },
+  { label: 'Payments Hub', icon: CreditCard, path: '/payments' },
   { label: 'Disbursements', icon: Send, path: '/disbursements' },
   { label: 'Transactions', icon: FileText, path: '/transactions' },
   { label: 'Reports', icon: BarChart3, path: '/reports' },
@@ -280,7 +280,7 @@ export default function Layout({ children, connected }: LayoutProps) {
       </div>
 
       {/* ─── Main Content ─── */}
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 page-shell">
         {/* Desktop Top Bar */}
         <div className={`hidden lg:flex h-16 items-center justify-between px-6 sticky top-0 z-40 transition-all duration-200 ${
           scrolled ? 'bg-white/80 backdrop-blur-md border-b border-slate-200' : 'bg-transparent'

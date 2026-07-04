@@ -255,14 +255,14 @@ export default function Dashboard() {
     <Layout connected={connected}>
       {/* ===== HERO HEADER ===== */}
       <div className="mb-8">
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50 p-6 shadow-sm">
+        <div className="soft-panel relative overflow-hidden rounded-3xl p-6">
           <div className="absolute -top-14 -right-10 h-40 w-40 rounded-full bg-blue-200/30 blur-2xl" />
           <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-emerald-200/30 blur-2xl" />
 
           <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="flex items-center gap-3 mb-1">
-                <span>{greeting.icon}</span>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="rounded-full bg-white/80 p-2 shadow-sm">{greeting.icon}</span>
                 <h1 className="text-2xl font-semibold text-foreground">
                   {greeting.text}{userName ? `, ${userName}` : ''}
                 </h1>
@@ -271,7 +271,7 @@ export default function Dashboard() {
                 {APP_DESCRIPTION}
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
                   isSuperAdmin
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                     : 'bg-slate-100 text-slate-600 border-slate-200'
@@ -280,7 +280,7 @@ export default function Dashboard() {
                   {isSuperAdmin ? 'Super Administrator' : 'Administrator'}
                 </span>
                 {!loading && stats.total_count > 0 && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                     <TrendingUp className="h-3 w-3" />
                     {successRate}% success rate
                   </span>
@@ -289,7 +289,7 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 min-w-[230px]">
-              <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
                 <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Revenue Today</p>
                 <p className="text-base font-semibold text-foreground mt-1">₱{fmt(stats.paid_amount || 0)}</p>
               </div>
@@ -331,7 +331,7 @@ export default function Dashboard() {
 
         {/* USD Wallet */}
         <Link to="/wallet" className="block group">
-          <Card className="card-3d h-full bg-white border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-lg cursor-pointer overflow-hidden">
+          <Card className="card-3d h-full soft-panel hover:border-slate-300 shadow-sm hover:shadow-lg cursor-pointer overflow-hidden rounded-2xl">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-30 group-hover:opacity-100 transition-opacity duration-300" />
             <CardContent className="p-5 relative">
               <div className="flex items-center justify-between mb-4">
@@ -369,7 +369,7 @@ export default function Dashboard() {
           icon={<XCircle className="h-4 w-4" />} loading={loading} tone="rose" />
 
         {/* USDT Settlement Card */}
-        <Card className="bg-white border border-slate-200 sm:col-span-2">
+        <Card className="soft-panel sm:col-span-2 rounded-2xl">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
@@ -409,7 +409,7 @@ export default function Dashboard() {
       {/* ===== MAIN CONTENT GRID ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
-        <Card className="card-3d bg-white border border-slate-200 shadow-sm hover:shadow-lg overflow-hidden">
+        <Card className="card-3d soft-panel rounded-2xl shadow-sm hover:shadow-lg overflow-hidden">
           <CardHeader className="pb-3 pt-5 px-5 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -428,7 +428,7 @@ export default function Dashboard() {
           <CardContent className="px-2 pb-3">
             <div className="space-y-0.5">
               {[
-                { to: '/payments', icon: CreditCard, label: 'Payments Hub' },
+                { to: '/payments', icon: CreditCard, label: 'Payments Hub', highlight: true },
                 { to: '/disbursements', icon: Send, label: 'Disbursements' },
                 { to: '/transactions', icon: FileText, label: 'Transactions' },
                 { to: '/reports', icon: BarChart3, label: 'Analytics' },
@@ -440,14 +440,14 @@ export default function Dashboard() {
                 { to: '/bot-messages', icon: MessageSquare, label: 'Bot Messages' },
               ].map((action, idx) => (
                 <Link key={action.to} to={action.to} className="block animate-fade-in-up" style={{animationDelay: `${idx * 0.05}s`}}>
-                  <button className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left hover:bg-slate-50 transition-smooth group">
+                  <button className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-smooth group ${action.highlight ? 'bg-gradient-to-r from-blue-50 to-cyan-50 ring-1 ring-blue-100 hover:bg-blue-100/70' : 'hover:bg-slate-50'}`}>
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-md bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 group-hover:scale-110 transition-smooth">
-                        <action.icon className="h-4 w-4 text-slate-600 group-hover:text-foreground transition-colors" />
+                      <div className={`h-8 w-8 rounded-md flex items-center justify-center transition-smooth ${action.highlight ? 'bg-blue-100 text-blue-700 group-hover:bg-blue-200 group-hover:scale-110' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200 group-hover:scale-110'}`}>
+                        <action.icon className="h-4 w-4 transition-colors" />
                       </div>
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-foreground transition-colors">{action.label}</span>
+                      <span className={`text-sm font-medium transition-colors ${action.highlight ? 'text-blue-800' : 'text-slate-700 group-hover:text-foreground'}`}>{action.label}</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-smooth" />
+                    <ChevronRight className={`h-4 w-4 transition-smooth ${action.highlight ? 'text-blue-500 group-hover:text-blue-700 group-hover:translate-x-1' : 'text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1'}`} />
                   </button>
                 </Link>
               ))}
@@ -480,7 +480,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Recent Transactions */}
-        <Card className="bg-white border border-slate-200 lg:col-span-2">
+        <Card className="soft-panel rounded-2xl lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-3 pt-5 px-5">
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Activity className="h-4 w-4 text-slate-500" />
@@ -574,7 +574,7 @@ export default function Dashboard() {
 
       {/* ===== REVENUE BREAKDOWN ===== */}
       {!loading && stats.total_amount > 0 && (
-        <Card className="mt-6 bg-white border border-slate-200">
+        <Card className="mt-6 soft-panel rounded-2xl">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-5">
               <div>
