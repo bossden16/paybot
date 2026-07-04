@@ -78,7 +78,6 @@ export default function PaymentsHub() {
             cancel_url: cancelUrl || `${window.location.origin}/`,
             currency: 'php',
             customer_email: customerEmail,
-            amount: amt,
             description,
           };
           break;

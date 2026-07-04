@@ -119,10 +119,11 @@ async def create_checkout_session(
         "currency": data.currency,
         "customer_email": data.customer_email,
         "external_id": data.external_id or f"magpie-session-{uuid.uuid4().hex[:12]}",
-        "amount": amount,
         "description": data.description,
         "metadata": data.metadata or {},
     }
+    if not payload["line_items"]:
+        payload["amount"] = amount
 
     # Create session via service
     try:
