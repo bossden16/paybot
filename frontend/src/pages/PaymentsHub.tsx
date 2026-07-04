@@ -24,6 +24,8 @@ export default function PaymentsHub() {
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [apiKey, setApiKey] = useState(localStorage.getItem('payment_api_key') || '');
+  const [successUrl, setSuccessUrl] = useState('');
+  const [cancelUrl, setCancelUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
@@ -66,6 +68,20 @@ export default function PaymentsHub() {
           endpoint = '/api/v1/magpie/create-payment-link';
           payload = { amount: amt, description, customer_name: customerName, customer_email: customerEmail };
           break;
+        case 'checkout_session':
+          endpoint = '/api/v1/magpie/checkout/sessions';
+          payload = {
+            payment_method_types: ['card', 'gcash', 'maya'],
+            line_items: [{ name: description || 'Payment', amount: Math.round(amt * 100), quantity: 1 }],
+            mode: 'payment',
+            success_url: successUrl || `${window.location.origin}/magpie-success`,
+            cancel_url: cancelUrl || `${window.location.origin}/`,
+            currency: 'php',
+            customer_email: customerEmail,
+            amount: amt,
+            description,
+          };
+          break;
       }
 
       const res = await fetch(endpoint, {
@@ -99,6 +115,7 @@ export default function PaymentsHub() {
     invoice: { icon: <FileText className="h-4 w-4" />, color: 'text-blue-400' },
     qr_code: { icon: <QrCode className="h-4 w-4" />, color: 'text-purple-400' },
     payment_link: { icon: <LinkIcon className="h-4 w-4" />, color: 'text-cyan-400' },
+    checkout_session: { icon: <CreditCard className="h-4 w-4" />, color: 'text-emerald-400' },
   };
 
   if (!canAccessPayments) {
@@ -148,6 +165,26 @@ export default function PaymentsHub() {
                     <Textarea placeholder="Payment description..." value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none" rows={2} />
+                  </div>
+                )}
+
+                {tab === 'checkout_session' && (
+                  <div>
+                    <Label className="text-muted-foreground">Description</Label>
+                    <Textarea placeholder="Session description..." value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none" rows={2} />
+
+                    <Label className="text-muted-foreground mt-3">Success URL</Label>
+                    <Input placeholder="https://your-app.example.com/magpie-success" value={successUrl}
+                      onChange={(e) => setSuccessUrl(e.target.value)}
+                      className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground mt-1">If left blank, defaults to <code>/magpie-success</code> on this host.</p>
+
+                    <Label className="text-muted-foreground mt-3">Cancel URL</Label>
+                    <Input placeholder="https://your-app.example.com/cancel" value={cancelUrl}
+                      onChange={(e) => setCancelUrl(e.target.value)}
+                      className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
                   </div>
                 )}
 

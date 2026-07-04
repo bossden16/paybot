@@ -45,6 +45,7 @@ import MaintenancePage from './pages/MaintenancePage';
 import BotIntro from './pages/BotIntro';
 import ScanQRPH from './pages/ScanQRPH';
 import HomePage from './pages/Index';
+import MagpieSuccess from './pages/MagpieSuccess';
 
 const queryClient = new QueryClient();
 
@@ -154,6 +155,7 @@ function AuthAwareShell() {
             <Route path="/roles" element={<RequireSuperAdmin><RolesPage /></RequireSuperAdmin>} />
             <Route path="/policies" element={<Policies />} />
             <Route path="/compliance" element={<Compliance />} />
+            <Route path="/magpie-success" element={<MagpieSuccess />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PageFade>

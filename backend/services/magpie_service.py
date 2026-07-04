@@ -15,6 +15,9 @@ class MagpieService:
     This service intentionally avoids Maya/PayMongo dependencies.
     """
 
+    api_key: str = ""
+    base_url: str = "https://api.magpie.im"
+
     def __init__(self):
         self.api_key = (settings.magpie_api_key or "").strip()
         base_url = (settings.magpie_base_url or "").strip().rstrip("/")
@@ -27,7 +30,10 @@ class MagpieService:
             "Accept": "application/json",
         }
         if self.api_key:
+            # Send both header formats for compatibility with different Magpie
+            # deployments: some expect `X-API-Key`, others `Authorization: Bearer ...`.
             headers["X-API-Key"] = self.api_key
+            headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
     async def _post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -314,6 +320,28 @@ class MagpieService:
         if not result.get("success"):
             return result
         return self._normalize_qr_response(result.get("data", {}), external_id)
+
+    async def create_session(self, *, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a hosted checkout session (Magpie Checkout Sessions API).
+
+        Accepts a payload matching Magpie's Checkout Sessions shape and returns
+        a normalized session response containing `session_id` and `payment_url`.
+        """
+        result = await self._post("/v1/checkout/sessions", payload)
+        if not result.get("success"):
+            return result
+        data = result.get("data", {})
+        # Normalize common session fields
+        session_id = self._pick(data, "id", "session_id", "checkout_id") or ""
+        payment_url = self._pick(data, "payment_url", "checkout_url", "url") or ""
+        external_id = self._pick(data, "external_id", "reference", "reference_id") or payload.get("external_id", "")
+        return {
+            "success": True,
+            "session_id": str(session_id),
+            "payment_url": str(payment_url),
+            "external_id": str(external_id),
+            "raw": data,
+        }
 
 
 async def run_card_settlement_sweep() -> None:

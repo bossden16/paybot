@@ -3,15 +3,34 @@
 Keeps old /api/v1/magpie endpoints working by forwarding to the xend router logic.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+import uuid
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
 from dependencies.auth import get_payment_user
 from schemas.auth import UserResponse
+from services.magpie_service import MagpieService
+from services.transactions import TransactionsService
 from routers import xend
 
 router = APIRouter(prefix="/api/v1/magpie", tags=["magpie-legacy"])
+
+
+class CheckoutSessionRequest(BaseModel):
+    payment_method_types: List[str] = Field(default_factory=list)
+    line_items: Optional[List[Dict[str, Any]]] = None
+    mode: str = "payment"
+    success_url: str = ""
+    cancel_url: str = ""
+    currency: str = "php"
+    customer_email: str = ""
+    external_id: str = ""
+    amount: Optional[float] = None
+    description: str = ""
+    metadata: Optional[Dict[str, Any]] = None
 
 
 @router.get("/payment-methods")
@@ -61,3 +80,75 @@ async def pay_qrph(
     db: AsyncSession = Depends(get_db),
 ):
     return await xend.pay_qrph(data=data, current_user=current_user, db=db)
+
+
+@router.post("/checkout/sessions")
+async def create_checkout_session(
+    data: CheckoutSessionRequest,
+    current_user: UserResponse = Depends(get_payment_user("payments:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a Magpie Checkout Session and record a transaction."""
+    svc = MagpieService()
+
+    # Determine amount: prefer explicit amount, else sum line_items
+    amount = data.amount
+    if amount is None and data.line_items:
+        try:
+            total = 0.0
+            for item in data.line_items:
+                qty = float(item.get("quantity", 1))
+                item_amount = float(item.get("amount", 0))
+                total += item_amount * qty
+            # If totals look like cents, convert to main currency units
+            if total > 1000:
+                total = total / 100.0
+            amount = float(total)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid line_items format")
+
+    if not amount or amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be provided and > 0")
+
+    payload = {
+        "payment_method_types": data.payment_method_types or [],
+        "line_items": data.line_items or [],
+        "mode": data.mode,
+        "success_url": data.success_url,
+        "cancel_url": data.cancel_url,
+        "currency": data.currency,
+        "customer_email": data.customer_email,
+        "external_id": data.external_id or f"magpie-session-{uuid.uuid4().hex[:12]}",
+        "amount": amount,
+        "description": data.description,
+        "metadata": data.metadata or {},
+    }
+
+    # Create session via service
+    try:
+        res = await svc.create_session(payload=payload)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to create session"))
+
+    # Record transaction
+    txn_svc = TransactionsService(db)
+    try:
+        txn = await txn_svc.create_transaction(
+            user_id=str(current_user.id),
+            transaction_type="checkout_session",
+            amount=amount,
+            external_id=res.get("external_id", payload.get("external_id")),
+            gateway_id=res.get("session_id", ""),
+            description=data.description,
+            customer_name="",
+            customer_email=data.customer_email or "",
+            payment_url=res.get("payment_url", ""),
+        )
+    except Exception:
+        # Non-fatal: return success but note transaction not recorded
+        return {"success": True, "data": res.get("raw", {}), "warning": "session created but transaction record failed"}
+
+    return {"success": True, "data": {"transaction_id": txn.id, **res}}

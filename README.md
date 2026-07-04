@@ -105,6 +105,24 @@ For Windows, run:
 - `cd frontend && pnpm build`
 - If the backend serves static files from `backend/static/`, copy the generated assets as needed.
 
+### Magpie Checkout cURL example
+Create a Magpie Checkout Session via the backend compatibility route and set the success URL to the frontend page:
+
+```bash
+curl -X POST https://your-backend.example.com/api/v1/magpie/checkout/sessions \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sk_live_your_magpie_secret_key" \
+  -d '{
+    "payment_method_types": ["card", "gcash"],
+    "line_items": [{"name":"Test","amount":5000,"quantity":1}],
+    "currency":"php",
+    "success_url":"https://your-app.example.com/magpie-success?session_id={CHECKOUT_SESSION_ID}&payment_url={CHECKOUT_PAYMENT_URL}&amount={AMOUNT}",
+    "cancel_url":"https://your-app.example.com/cancel"
+  }'
+```
+
+After payment, Magpie will redirect customers to the frontend route `/magpie-success` (or the backend static redirect which forwards there), preserving the session and payment_url query parameters.
+
 ---
 
 ## 🔐 Security & Regulatory Compliance

@@ -153,7 +153,7 @@ async def _create_checkout_transaction(
     descriptor = (request.descriptor or "").strip().upper()[:22]
     base_description = (request.description or "").strip() or "magpie payment"
 
-    if not service.api_key:
+    if not getattr(service, "api_key", None):
         return {
             "success": False,
             "message": "Magpie API key is not configured",
