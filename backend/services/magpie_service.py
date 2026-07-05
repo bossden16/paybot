@@ -101,7 +101,9 @@ class MagpieService:
                 return {"success": False, "error": str(exc)}
 
     @staticmethod
-    def _pick(data: Dict[str, Any], *keys: str) -> Optional[Any]:
+    def _pick(data: Any, *keys: str) -> Optional[Any]:
+        if not isinstance(data, dict):
+            return None
         for key in keys:
             if key in data and data[key] not in (None, ""):
                 return data[key]
@@ -422,6 +424,9 @@ class MagpieService:
         if not result.get("success"):
             return result
         data = result.get("data", {})
+        if not isinstance(data, dict):
+            return {"success": False, "error": f"Unexpected response format from Magpie: {type(data).__name__}"}
+
         # Normalize common session fields
         session_id = self._pick(data, "id", "session_id", "checkout_id") or ""
         payment_url = self._pick(data, "payment_url", "checkout_url", "url") or ""
