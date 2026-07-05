@@ -25,7 +25,7 @@
 
 **xend Philippines** is a premier, bank-grade financial settlement platform designed for licensed merchants and high-volume commercial operations. It transforms standard communication channels into high-performance financial nodes, enabling secure card acceptance, multi-currency liquidity management, and real-time clearing with enterprise-level oversight.
 
-Our infrastructure is strictly regulated and compliant with local financial standards, integrated directly with **Maya Business**, **Security Bank**, **PayMongo**, and **PhotonPay** for robust, multi-channel clearing.
+Our infrastructure is strictly regulated and compliant with local financial standards, integrated directly with **Maya Business**, **Security Bank**, **Magpie**, and **PhotonPay** for robust, multi-channel clearing.
 
 ---
 
@@ -49,12 +49,13 @@ xend operates on a "Trusted Node" architecture, ensuring data integrity and high
 - **Unified QRPH**: Dynamic generation of BSP-compliant QRPH codes for universal interoperability.
 
 ### 💳 Institutional Payment Gateways
+
 - **Maya Business Mainnet**: Direct settlement and native e-wallet integration.
 - **Security Bank Collect**: Enterprise-grade Apple Pay and Google Pay processing.
 - **Global Clearing**: Specialized PhotonPay channels for high-volume Alipay and WeChat Pay international trade.
 
-<<<<<<< HEAD
 ### 💎 Digital Wallet & Liquidity Ecosystem
+
 - **Multi-Currency Nodes**: Seamlessly manage PHP, USD, and USDT (TRC-20) liquidity.
 - **Regulated Clearing**: Automated T+1 local bank clearing and real-time inter-vault transfers.
 - **Instant KYB/KYC**: Guided registration flow via Telegram.

@@ -194,6 +194,7 @@
 
 .soft-panel {
   background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(226, 232, 240, 0.9);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
@@ -227,6 +228,7 @@
 
 /* Glass Morphism Effect */
 .glass-effect {
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.18);

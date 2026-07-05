@@ -1,11 +1,16 @@
 {
-  "extends": "../tsconfig.json",
   "compilerOptions": {
     "jsx": "react-native",
     "allowJs": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["react", "react-native"]
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "types": ["react", "react-native"],
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "target": "ES2020",
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src", "index.js"],
   "exclude": ["node_modules", "babel.config.js", "metro.config.js"]
