@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select, and_, func
@@ -60,16 +60,18 @@ class CurrencyService:
 
         # Get current rate
         pair = f"{from_currency}_{to_currency}"
-        try:
-            rate = await exchange_rate_service.get_rate(pair)
-        except RuntimeError:
-            raise ValueError(f"Cannot get rate for {pair}")
 
-        # Check for admin override
+        # Check for admin override first so tests and manual overrides work even
+        # when the live provider does not support the pair.
         override = await self._get_active_override(pair)
         if override:
             rate = override.override_rate
             logger.info(f"Using overridden rate for {pair}: {rate}")
+        else:
+            try:
+                rate = await exchange_rate_service.get_rate(pair)
+            except RuntimeError:
+                raise ValueError(f"Cannot get rate for {pair}")
 
         # Calculate conversion
         fee_rate = DEFAULT_CONVERSION_FEE
@@ -122,15 +124,14 @@ class CurrencyService:
 
         # Get current rate
         pair = f"{from_currency}_{to_currency}"
-        try:
-            rate = await exchange_rate_service.get_rate(pair)
-        except RuntimeError as e:
-            raise ValueError(f"Cannot get exchange rate: {e}")
-
-        # Check for admin override
         override = await self._get_active_override(pair)
         if override:
             rate = override.override_rate
+        else:
+            try:
+                rate = await exchange_rate_service.get_rate(pair)
+            except RuntimeError as e:
+                raise ValueError(f"Cannot get exchange rate: {e}")
 
         # Calculate amounts
         fee_rate = DEFAULT_CONVERSION_FEE

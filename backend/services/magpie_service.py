@@ -2,6 +2,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
+import asyncio
 import httpx
 
 from core.config import settings
@@ -36,34 +37,68 @@ class MagpieService:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
-    async def _post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _post(self, path: str, payload: Dict[str, Any], idempotency_key: Optional[str] = None, extra_headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         if not self.api_key:
             return {"success": False, "error": "MAGPIE_API_KEY not configured"}
 
         url = f"{self.base_url}{path}"
         logger.debug("Magpie request %s payload=%s", url, payload)
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, json=payload, headers=self._headers())
-            response_text = resp.text or ""
-            if resp.status_code >= 400:
-                logger.warning(
-                    "Magpie API error %s %s payload=%s response=%s",
-                    resp.status_code,
-                    url,
+        max_attempts = 4
+        for attempt in range(1, max_attempts + 1):
+            try:
+                headers = self._headers()
+                if idempotency_key:
+                    headers["Idempotency-Key"] = idempotency_key
+                if extra_headers:
+                    headers.update(extra_headers)
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(url, json=payload, headers=headers)
+                response_text = resp.text or ""
+
+                # Retry on server errors (5xx)
+                if resp.status_code >= 500 and attempt < max_attempts:
+                    logger.warning(
+                        "Magpie API server error %s %s attempt=%d/%d - retrying",
+                        resp.status_code,
+                        url,
+                        attempt,
+                        max_attempts,
+                    )
+                    # Exponential backoff with jitter
+                    backoff = (2 ** (attempt - 1)) * 0.5
+                    jitter = backoff * 0.2
+                    await asyncio.sleep(backoff + (jitter * (0.5 - asyncio.get_event_loop().time() % 1)))
+                    continue
+
+                if resp.status_code >= 400:
+                    logger.warning(
+                        "Magpie API error %s %s payload=%s response=%s",
+                        resp.status_code,
+                        url,
+                        payload,
+                        response_text,
+                    )
+                    return {
+                        "success": False,
+                        "error": f"Magpie API error ({resp.status_code}): {response_text}",
+                    }
+
+                data = resp.json() if response_text else {}
+                logger.debug("Magpie response %s payload=%s data=%s", url, payload, data)
+                return {"success": True, "data": data}
+            except Exception as exc:
+                logger.error(
+                    "Magpie request failed (attempt %d/%d): %s payload=%s",
+                    attempt,
+                    max_attempts,
+                    exc,
                     payload,
-                    response_text,
+                    exc_info=True,
                 )
-                return {
-                    "success": False,
-                    "error": f"Magpie API error ({resp.status_code}): {response_text}",
-                }
-            data = resp.json() if response_text else {}
-            logger.debug("Magpie response %s payload=%s data=%s", url, payload, data)
-            return {"success": True, "data": data}
-        except Exception as exc:
-            logger.error("Magpie request failed: %s payload=%s", exc, payload, exc_info=True)
-            return {"success": False, "error": str(exc)}
+                if attempt < max_attempts:
+                    await asyncio.sleep(0.5 * attempt)
+                    continue
+                return {"success": False, "error": str(exc)}
 
     @staticmethod
     def _pick(data: Dict[str, Any], *keys: str) -> Optional[Any]:
@@ -86,7 +121,9 @@ class MagpieService:
         }
 
     def _normalize_qr_response(self, data: Dict[str, Any], fallback_external_id: str) -> Dict[str, Any]:
-        qr_id = self._pick(data, "qr_id", "id", "checkout_id") or ""
+        # Do not fall back to 'checkout_id' here — it can be confused with
+        # the checkout response when tests or integrations return mixed fields.
+        qr_id = self._pick(data, "qr_id", "id") or ""
         qr_content = self._pick(data, "qr_content", "qr_url", "qr_image_url", "payment_url") or ""
         external_id = self._pick(data, "external_id", "reference", "reference_id") or fallback_external_id
 
@@ -128,17 +165,27 @@ class MagpieService:
         if cleaned_metadata:
             payload["metadata"] = cleaned_metadata
 
-        result = await self._post("/v1/payments/checkout", payload)
+        idempotency_key = external_id or f"magpie-checkout-{uuid.uuid4().hex[:12]}"
+        result = await self._post("/v1/payments/checkout", payload, idempotency_key=idempotency_key)
         if not result.get("success"):
             return result
         return self._normalize_checkout_response(result.get("data", {}), external_id)
 
-    async def create_invoice(self, *, amount: float, description: str = "") -> Dict[str, Any]:
+    async def create_invoice(
+        self,
+        *,
+        amount: float,
+        description: str = "",
+        customer_name: str = "",
+        customer_email: str = "",
+    ) -> Dict[str, Any]:
         external_id = f"magpie-inv-{uuid.uuid4().hex[:12]}"
         result = await self.create_checkout(
             amount=amount,
             description=description or "Invoice payment",
             external_id=external_id,
+            customer_name=customer_name,
+            customer_email=customer_email,
         )
         if not result.get("success"):
             return result
@@ -181,6 +228,7 @@ class MagpieService:
                 "mobile_number": mobile_number,
                 "external_id": external_id,
             },
+            idempotency_key=external_id,
         )
         if not result.get("success"):
             return result
@@ -242,6 +290,7 @@ class MagpieService:
                 "customer_email": customer_email,
                 "mobile_number": mobile_number,
             },
+            idempotency_key=external_id,
         )
         if not result.get("success"):
             return result
@@ -267,6 +316,7 @@ class MagpieService:
                 "customer_phone": customer_phone,
                 "external_id": external_id,
             },
+            idempotency_key=external_id,
         )
         if not result.get("success"):
             return result
@@ -292,6 +342,7 @@ class MagpieService:
                 "description": description,
                 "external_id": external_id,
             },
+            idempotency_key=external_id,
         )
         if not result.get("success"):
             return result
@@ -334,7 +385,8 @@ class MagpieService:
             "merchant_name": merchant_name,
             "descriptor": descriptor,
         }
-        result = await self._post("/v1/payments/qr", payload)
+        idempotency_key = external_id or f"magpie-qr-{uuid.uuid4().hex[:12]}"
+        result = await self._post("/v1/payments/qr", payload, idempotency_key=idempotency_key)
         if not result.get("success"):
             return result
         return self._normalize_qr_response(result.get("data", {}), external_id)

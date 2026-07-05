@@ -4,6 +4,7 @@ import os
 import re
 import time
 from pathlib import Path
+from fastapi import HTTPException
 
 from asyncpg.exceptions import (
     DuplicateTableError,
@@ -653,7 +654,12 @@ async def get_db() -> AsyncSession:
             try:
                 yield session
             except Exception as e:
-                logger.error(f"Database session error: {e}", exc_info=True)
+                # HTTPExceptions are intentional responses raised by route handlers
+                # (e.g., auth failures). Don't treat them as internal DB errors.
+                if isinstance(e, HTTPException):
+                    logger.debug(f"Database session HTTPException: {e}")
+                else:
+                    logger.error(f"Database session error: {e}", exc_info=True)
                 # Don't manually rollback here - AsyncSession.__aexit__ will automatically rollback on exception
                 # Manual rollback would cause "cannot switch to state 15" error due to double rollback
                 raise

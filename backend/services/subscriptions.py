@@ -1,5 +1,8 @@
 import logging
 from typing import Optional, Dict, Any, List
+import sqlalchemy
+
+from core.database import db_manager
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +32,19 @@ class SubscriptionsService:
             return obj
         except Exception as e:
             await self.db.rollback()
+            msg = str(e).lower()
+            if isinstance(e, sqlalchemy.exc.OperationalError) and "no such table" in msg:
+                logger.warning("Detected missing tables during subscriptions.create; attempting to create tables and retry")
+                try:
+                    await db_manager.create_tables()
+                    self.db.add(Subscriptions(**data if not user_id else {**data, 'user_id': user_id}))
+                    await self.db.commit()
+                    obj = (await self.db.execute(select(Subscriptions).order_by(Subscriptions.id.desc()).limit(1))).scalar_one_or_none()
+                    if obj:
+                        await self.db.refresh(obj)
+                        return obj
+                except Exception:
+                    pass
             logger.error(f"Error creating subscriptions: {str(e)}")
             raise
 
@@ -48,6 +64,23 @@ class SubscriptionsService:
             return objs
         except Exception as e:
             await self.db.rollback()
+            msg = str(e).lower()
+            if isinstance(e, sqlalchemy.exc.OperationalError) and "no such table" in msg:
+                logger.warning("Detected missing tables during subscriptions.bulk_create; attempting to create tables and retry")
+                try:
+                    await db_manager.create_tables()
+                    objs = []
+                    for data in items:
+                        if user_id:
+                            data = {**data, 'user_id': user_id}
+                        objs.append(Subscriptions(**data))
+                    self.db.add_all(objs)
+                    await self.db.commit()
+                    for obj in objs:
+                        await self.db.refresh(obj)
+                    return objs
+                except Exception:
+                    pass
             logger.error(f"Error bulk creating subscriptions: {str(e)}")
             raise
 

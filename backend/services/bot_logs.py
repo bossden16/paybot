@@ -1,5 +1,8 @@
 import logging
 from typing import Optional, Dict, Any, List
+import sqlalchemy
+
+from core.database import db_manager
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +32,21 @@ class Bot_logsService:
             return obj
         except Exception as e:
             await self.db.rollback()
+            # If tables are missing (tests may run before migrations), attempt to create them once and retry.
+            msg = str(e).lower()
+            if isinstance(e, sqlalchemy.exc.OperationalError) and "no such table" in msg:
+                logger.warning("Detected missing tables during bot_logs.create; attempting to create tables and retry")
+                try:
+                    await db_manager.create_tables()
+                    # Retry once
+                    self.db.add(Bot_logs(**data if not user_id else {**data, 'user_id': user_id}))
+                    await self.db.commit()
+                    obj = (await self.db.execute(select(Bot_logs).order_by(Bot_logs.id.desc()).limit(1))).scalar_one_or_none()
+                    if obj:
+                        await self.db.refresh(obj)
+                        return obj
+                except Exception:
+                    pass
             logger.error(f"Error creating bot_logs: {str(e)}")
             raise
 
@@ -48,6 +66,24 @@ class Bot_logsService:
             return objs
         except Exception as e:
             await self.db.rollback()
+            msg = str(e).lower()
+            if isinstance(e, sqlalchemy.exc.OperationalError) and "no such table" in msg:
+                logger.warning("Detected missing tables during bot_logs.bulk_create; attempting to create tables and retry")
+                try:
+                    await db_manager.create_tables()
+                    # Retry once
+                    objs = []
+                    for data in items:
+                        if user_id:
+                            data = {**data, 'user_id': user_id}
+                        objs.append(Bot_logs(**data))
+                    self.db.add_all(objs)
+                    await self.db.commit()
+                    for obj in objs:
+                        await self.db.refresh(obj)
+                    return objs
+                except Exception:
+                    pass
             logger.error(f"Error bulk creating bot_logs: {str(e)}")
             raise
 

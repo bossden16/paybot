@@ -195,15 +195,21 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Skipping mock data initialization because database is not ready.")
     # Start background scheduler (T+1 card settlement sweep)
-    try:
-        await start_scheduler()
-    except Exception as _sched_exc:
-        logger.warning('Scheduler startup failed (non-fatal): %s', _sched_exc)
+    # Allow tests to disable background tasks (scheduler, workers, telegram setup)
+    disable_bg = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
+    if not disable_bg:
+        try:
+            await start_scheduler()
+        except Exception as _sched_exc:
+            logger.warning('Scheduler startup failed (non-fatal): %s', _sched_exc)
     # MODULE_STARTUP_END
 
     # Initialize Automated Operations Worker
-    from services.background_tasks import background_worker
-    _worker_task = asyncio.create_task(background_worker.start_worker())
+    if not disable_bg:
+        from services.background_tasks import background_worker
+        _worker_task = asyncio.create_task(background_worker.start_worker())
+    else:
+        _worker_task = None
 
     # Auto-register Telegram webhook and bot commands if backend URL is configured.
     # Run this as a background task so it does not delay the health-check response;
@@ -212,7 +218,7 @@ async def lifespan(app: FastAPI):
     _telegram_task: asyncio.Task | None = None
     backend_url = settings.backend_url
     _local_prefixes = ("http://127.0.0.1", "https://127.0.0.1", "http://localhost", "https://localhost", "http://0.0.0.0", "https://0.0.0.0")
-    if settings.telegram_bot_token and backend_url and not any(backend_url.startswith(p) for p in _local_prefixes):
+    if not disable_bg and settings.telegram_bot_token and backend_url and not any(backend_url.startswith(p) for p in _local_prefixes):
         _telegram_task = asyncio.create_task(_setup_telegram(backend_url))
 
     logger.info("=== Application startup completed successfully ===")

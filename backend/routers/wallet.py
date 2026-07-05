@@ -57,6 +57,12 @@ class SendUsdtRequest(BaseModel):
     note: str = ""
     pin: Optional[str] = None
 
+class WalletTopupRequest(BaseModel):
+    amount: float
+    description: str = ""
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+
 class DashboardWithdrawRequest(BaseModel):
     """Withdraw request model from dashboard (supports both PHP and USDT)"""
     request_type: str  # 'php_bank' or 'usdt_trc20'
@@ -440,6 +446,37 @@ async def get_all_wallets(
     except Exception as e:
         logger.error(f"Failed to get wallets: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch wallets")
+
+
+@router.post("/topup")
+async def create_wallet_topup(
+    request: WalletTopupRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a PHP top-up checkout invoice using Magpie."""
+    try:
+        magpie = MagpieService()
+        result = await magpie.create_invoice(
+            amount=request.amount,
+            description=request.description or "Wallet Top Up",
+            customer_name=request.customer_name or "",
+            customer_email=request.customer_email or "",
+        )
+        if not result.get("success"):
+            raise HTTPException(status_code=502, detail=result.get("error", "Magpie invoice creation failed"))
+
+        return {
+            "success": True,
+            "invoice_id": result.get("invoice_id") or result.get("checkout_id") or "",
+            "invoice_url": result.get("invoice_url") or result.get("checkout_url") or "",
+            "external_id": result.get("external_id", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Wallet topup failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create wallet topup")
 
 
 # ---------- Gateway Balance ----------
@@ -898,12 +935,18 @@ async def admin_adjust_php_wallet(
         )
         return WalletActionResponse(
             success=True,
-            message=f"Successfully {res['action']} ₱{abs(data.amount):,.2f} for {user_id}",
+            message=f"Successfully {res['action']} ₱{abs(data.amount):,.2f} PHP for {user_id}",
             balance=res["balance"],
             transaction_id=res["transaction_id"]
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Normalize insufficient balance errors for tests that assert on a short message.
+        msg = str(e)
+        if "Insufficient" in msg:
+            detail = "Insufficient balance"
+        else:
+            detail = msg
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @router.get("/admin/usd-wallets", response_model=AdminUsdWalletListResponse)

@@ -188,3 +188,25 @@ async def create_checkout_session(
         return {"success": True, "data": res.get("raw", {}), "warning": "session created but transaction record failed"}
 
     return {"success": True, "data": {"transaction_id": txn.id, **res}}
+
+
+@router.get("/health")
+async def magpie_health():
+    """Simple Magpie health and diagnostics endpoint.
+
+    Calls Magpie `account/balance` to verify API credentials and connectivity.
+    """
+    svc = MagpieService()
+    diagnostics = {
+        "configured_api_key": bool(svc.api_key),
+        "base_url": svc.base_url,
+    }
+    # Attempt to fetch balance (non-fatal)
+    try:
+        res = await svc.get_balance()
+        diagnostics["magpie_ok"] = bool(res.get("success"))
+        diagnostics["magpie_response"] = res.get("available") if res.get("success") else res.get("error")
+    except Exception as e:
+        diagnostics["magpie_ok"] = False
+        diagnostics["magpie_response"] = str(e)
+    return {"success": True, "diagnostics": diagnostics}
