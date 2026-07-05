@@ -40,7 +40,7 @@ Before initializing the `Mainnet` cluster and accepting institutional payments, 
 ### 7. **Monitoring & Telemetry**
    - [ ] **Real-time Grid Status**: Set up Grafana/Prometheus for node health monitoring.
    - [ ] **Ledger Discrepancy Alerts**: Immediate notification on any balance vs. txn mismatch.
-   - [ ] **Railway Monitoring**: Integrated log streaming for the production environment.
+- [ ] **Render Monitoring**: Integrated log streaming for the production environment.
    - [ ] **Clearing Window Trace**: Monitor T+1 settlement sweep success (00:00 UTC).
 
 ### 8. **Pre-Mainnet Stress Testing**
@@ -83,7 +83,7 @@ The immutable source of truth for the platform.
 
 **System Degradation?**
 - Initiate "Emergency Node Pause" via the Admin Dashboard.
-- Review Maya Gateway heartbeat logs in the Railway cluster.
+- Review Maya Gateway heartbeat logs in the Render cluster.
 - Contact the DRL Solutions on-call compliance engineering team.
 
 ---

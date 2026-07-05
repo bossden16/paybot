@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Railway backend entrypoint
+# Backend container entrypoint
 
 echo "Running database migrations..."
 # Attempt migrations with a 35s timeout (non-fatal)

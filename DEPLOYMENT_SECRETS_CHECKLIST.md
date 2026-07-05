@@ -4,16 +4,28 @@ This file lists the GitHub Actions Secrets and Variables referenced by the repos
 
 ---
 
-**Railway**
-- Required Secrets:
-  - RAILWAY_API_KEY (or RAILWAY_TOKEN)
-  - RAILWAY_PROJECT_ID (or RAILWAY_SERVICE_ID / RAILWAY_SERVICE)
+**Render**
+- Required environment variables for the Render backend service:
+  - TELEGRAM_BOT_TOKEN
+  - TELEGRAM_BOT_USERNAME
+  - TELEGRAM_ADMIN_IDS
+  - JWT_SECRET_KEY
+  - XENDIT_SECRET_KEY
+  - PAYMONGO_SECRET_KEY
+  - PAYMONGO_PUBLIC_KEY
+  - MAGPIE_API_KEY
+  - MAGPIE_WEBHOOK_SECRET
+  - ENVIRONMENT=production
+  - ALLOWED_ORIGINS
 - Optional:
-  - VITE_TURNSTILE_SITE_KEY
-  - CF_API_TOKEN (Cloudflare purge)
-  - CF_ZONE_ID
+  - PAYMONGO_WEBHOOK_SECRET
+  - PHOTONPAY_APP_ID
+  - PHOTONPAY_APP_SECRET
+  - PHOTONPAY_SITE_ID
+  - TRANSFI_API_KEY
+  - TRANSFI_WEBHOOK_SECRET
 
-Notes: `RAILWAY_TOKEN` can be provided as a repository Secret or the workflow may read repository Variables fallback `vars.RAILWAY_TOKEN` / `vars.RAILWAY_SERVICE`.
+Notes: Set these values in the Render service environment configuration. Use `DATABASE_URL` from Render's managed Postgres database or provide an external database URL if needed.
 
 ---
 
@@ -81,7 +93,6 @@ Notes: Some workflows also accept `DATABASE_URL` directly as a secret (Lightsail
 
 **Additional / Generic secrets referenced**
 - GITHUB_TOKEN (provided by Actions; used for GHCR login in some workflows)
-- RAILWAY_SERVICE, RAILWAY_SERVICE_ID (repository Variables or Secrets used as service selectors)
 - VITE_TURNSTILE_SITE_KEY
 - CF_API_TOKEN and CF_ZONE_ID (Cloudflare purge)
 

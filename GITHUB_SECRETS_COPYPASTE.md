@@ -4,13 +4,20 @@ Paste each value into **Settings → Secrets and variables → Actions** as a ne
 
 ---
 
-# Railway
+# Render service environment variables
 
-RAILWAY_API_KEY=
-RAILWAY_PROJECT_ID=
-VITE_TURNSTILE_SITE_KEY= (optional)
-CF_API_TOKEN= (optional)
-CF_ZONE_ID= (optional)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_USERNAME=
+TELEGRAM_ADMIN_IDS=
+JWT_SECRET_KEY=
+XENDIT_SECRET_KEY=
+PAYMONGO_SECRET_KEY=
+PAYMONGO_PUBLIC_KEY=
+MAGPIE_API_KEY=
+MAGPIE_WEBHOOK_SECRET=
+ENVIRONMENT=production
+ALLOWED_ORIGINS=
+DATABASE_URL= (set by Render managed DB or external DB)
 
 ---
 
@@ -57,15 +64,10 @@ EC2_APP_DIR=
 # Generic
 
 GITHUB_TOKEN= (provided by Actions)
-RAILWAY_TOKEN= (alternate to RAILWAY_API_KEY)
-RAILWAY_SERVICE=
-RAILWAY_SERVICE_ID=
 CF_API_TOKEN=
 CF_ZONE_ID=
 
 # Notes
 
 - For multiline secrets (JSON, PEM), paste the exact content preserving newlines.
-- If you use GitHub repository Variables (`Settings → Secrets and variables → Actions → Variables`),
-  set `RAILWAY_SERVICE` or other gating variables there as needed.
 - After adding secrets, run the appropriate workflow manually from Actions to verify.

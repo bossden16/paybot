@@ -36,7 +36,7 @@ xend operates on a "Trusted Node" architecture, ensuring data integrity and high
 - **Core Ledger**: Python FastAPI engine with synchronous ledger balancing and atomic transaction processing.
 - **Merchant Interface**: React 18 high-fidelity dashboard with real-time grid monitoring.
 - **Mobile Terminals**: Industrial-grade React Native Android implementation for physical point-of-sale.
-- **Grid Infrastructure**: Distributed mainnet cluster on **Railway** with edge-node encryption.
+- **Grid Infrastructure**: Distributed mainnet cluster on **Render** with edge-node encryption.
 
 ---
 
@@ -139,8 +139,8 @@ After payment, Magpie will redirect customers to the frontend route `/magpie-suc
 
 | Node | environment | status | uptime |
 |---------|-------------|----------|--------|
-| **Primary Dashboard** | Mainnet | [Online 🟢](https://mayaproduction.up.railway.app) | 99.98% |
-| **API Gateway** | Production | `https://mayaproduction.up.railway.app/api/v1` | 99.99% |
+| **Primary Dashboard** | Mainnet | [Online 🟢](https://your-production-backend.onrender.com) | 99.98% |
+| **API Gateway** | Production | `https://your-production-backend.onrender.com/api/v1` | 99.99% |
 | **Telegram Node** | Live | [@QRPHBOT](https://t.me/QRPHBOT) | 100% |
 | **Mobile Cluster** | Verified | Build `PB-2024-05` | Active |
 

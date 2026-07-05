@@ -6,7 +6,7 @@ The POS Terminal system is now fully operational with bank-grade settlement infr
 ### Operational Parameters:
 - **Status**: Public / Live / PCI-DSS Compliant
 - **Last Sync**: 2024-05-26
-- **Backend**: Railway Production Cluster (Mainnet)
+- **Backend**: Render Production Cluster (Mainnet)
 - **Endpoints**: `/api/v1/pos-terminals`, `/api/v1/wallet`
 
 ### Active Tasks:

@@ -51,12 +51,9 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ### 3. Mainnet Grid Monitoring
-Monitor production cluster telemetry using Railway logs or integrated Grafana boards.
+Monitor production cluster telemetry using Render dashboard logs or integrated Grafana boards.
 
-```bash
-# Stream institutional logs
-railway logs --service paybot --environment production --follow
-```
+Use Render's log stream for the `paybot-backend` service and validate the health endpoint in the Render dashboard.
 
 ---
 *© 2024 xend Infrastructure Engineering*
