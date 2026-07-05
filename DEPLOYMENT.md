@@ -442,23 +442,11 @@ aws cloudwatch put-metric-alarm \
   --comparison-operator GreaterThanThreshold
 ```
 
-### Railway Monitoring
+### Production Monitoring
 
-If you deploy xend to Railway, use Railway CLI logs and helper scripts to monitor production.
+If you deploy xend to Render, use the Render dashboard logs and service health checks to monitor production.
 
-```bash
-export RAILWAY_PROJECT_ID="your_project_id"
-railway logs --project "$RAILWAY_PROJECT_ID" --service paybot --environment production --follow
-railway logs --project "$RAILWAY_PROJECT_ID" --service paybot --environment production --http --lines 100
-bash scripts/railway-monitor.sh --project "$RAILWAY_PROJECT_ID" --follow
-bash scripts/railway-monitor.sh --project "$RAILWAY_PROJECT_ID" --latest --follow
-```
-
-Use `--health` after monitoring to validate the backend health endpoint:
-
-```bash
-bash scripts/railway-monitor.sh --project "$RAILWAY_PROJECT_ID" --health "https://mayaproduction.up.railway.app/health"
-```
+Use Render's log stream for the `paybot-backend` service and verify the backend health endpoint after deployment.
 
 ### Database Backups
 

@@ -4,10 +4,12 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowRight, ChevronRight, CheckCircle2,
-  UserPlus, Menu, X, Lock, Mail,
+  UserPlus, Menu, X, Lock, Mail, XIcon,
 } from 'lucide-react';
+import { z } from 'zod';
 import type { TelegramWidgetUser } from '@/lib/auth';
-import { APP_NAME, SUPPORT_URL } from '@/lib/brand';
+import { APP_NAME, SUPPORT_URL, SUPPORT_HANDLE } from '@/lib/brand';
+import { loginSchema } from '@/lib/validation';
 import AppFooter from '@/components/AppFooter';
 
 declare global {
@@ -209,8 +211,12 @@ export default function Login() {
 
   const handleEmailLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!email.trim() || !password) {
-      setLocalError('Please enter both your email and password.');
+    
+    // Validate with Zod schema
+    const result = loginSchema.safeParse({ email, password });
+    if (!result.success) {
+      const firstError = result.error.issues[0];
+      setLocalError(firstError?.message || 'Please check your input');
       return;
     }
 
@@ -223,9 +229,9 @@ export default function Login() {
         setSubmitting(false);
         return;
       }
-      await login(email.trim(), password, turnstileToken ?? undefined);
+      await login(result.data.email, result.data.password, turnstileToken ?? undefined);
     } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'Login failed');
+      setLocalError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -546,7 +552,7 @@ export default function Login() {
             <div className="relative">
               <div className="mb-4 sm:mb-5">
                 <h3 className="text-lg sm:text-xl font-bold text-[#141414] mb-1">Philippine E-Wallets</h3>
-                <p className="text-[#595959] text-sm">Accept from all major Philippine digital wallets via PayMongo.</p>
+                <p className="text-[#595959] text-sm">Accept major Philippine digital wallets and QR-based payments through the Magpie checkout flow.</p>
               </div>
               <RevealGroup className="flex flex-wrap gap-3 sm:gap-4 mb-5 sm:mb-6">
                 {[
@@ -564,7 +570,7 @@ export default function Login() {
               </RevealGroup>
               <ul className="grid sm:grid-cols-2 gap-2">
                 {[
-                  'E-wallet checkout via PayMongo',
+                  'E-wallet checkout via Magpie',
                   '70M+ GCash users',
                   '30M+ Maya users',
                   'GrabPay ecosystem integration',
@@ -864,7 +870,7 @@ export default function Login() {
                 Need access?{' '}
                 <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer"
                   className="text-[#0B63FF] hover:text-[#095ed6] transition-colors">
-                  Contact @phsystem
+                  Contact {SUPPORT_HANDLE}
                 </a>
               </p>
             </div>

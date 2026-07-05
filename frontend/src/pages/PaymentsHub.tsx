@@ -11,29 +11,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   FileText, QrCode, LinkIcon, Plus, Loader2, CheckCircle,
-  Copy, ExternalLink, Wallet, CreditCard, Building2, Smartphone, Store,
+  Copy, ExternalLink, CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
 
 export default function PaymentsHub() {
-  const { user } = useAuth();
+  const { user, permissions, isSuperAdmin } = useAuth();
   const [tab, setTab] = useState('invoice');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [bankCode, setBankCode] = useState('BDO');
-  const [ewalletProvider, setEwalletProvider] = useState('PH_GCASH');
-  const [mobileNumber, setMobileNumber] = useState('');
+  const [apiKey, setApiKey] = useState(localStorage.getItem('payment_api_key') || '');
+  const [successUrl, setSuccessUrl] = useState('');
+  const [cancelUrl, setCancelUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   usePaymentEvents({ enabled: !!user });
 
+  const canAccessPayments = Boolean(isSuperAdmin || permissions?.can_manage_payments);
+
   const reset = () => { setAmount(''); setDescription(''); setCustomerName(''); setCustomerEmail(''); setResult(null); };
 
+  useEffect(() => {
+    if (apiKey.trim()) {
+      localStorage.setItem('payment_api_key', apiKey.trim());
+    }
+  }, [apiKey]);
+
   const handleCreate = async () => {
+    if (!canAccessPayments) {
+      toast.error('You do not have permission to create payments.');
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) { toast.error('Enter a valid amount'); return; }
     setLoading(true);
     setResult(null);
@@ -44,38 +57,40 @@ export default function PaymentsHub() {
 
       switch (tab) {
         case 'invoice':
-          endpoint = '/api/v1/xendit/create-invoice';
+          endpoint = '/api/v1/magpie/create-invoice';
           payload = { amount: amt, description, customer_name: customerName, customer_email: customerEmail };
           break;
         case 'qr_code':
-          endpoint = '/api/v1/xendit/create-qr-code';
+          endpoint = '/api/v1/magpie/create-qr-code';
           payload = { amount: amt, description };
           break;
         case 'payment_link':
-          endpoint = '/api/v1/xendit/create-payment-link';
+          endpoint = '/api/v1/magpie/create-payment-link';
           payload = { amount: amt, description, customer_name: customerName, customer_email: customerEmail };
           break;
-        case 'virtual_account':
-          endpoint = '/api/v1/gateway/virtual-account';
-          payload = { amount: amt, bank_code: bankCode, name: customerName || 'Customer' };
-          break;
-        case 'ewallet':
-          endpoint = '/api/v1/gateway/ewallet-charge';
-          payload = { amount: amt, channel_code: ewalletProvider, mobile_number: mobileNumber };
-          break;
-        case 'alipay':
-          endpoint = '/api/v1/photonpay/alipay-session';
-          payload = { amount: amt, description: description || 'Alipay payment' };
-          break;
-        case 'wechat':
-          endpoint = '/api/v1/photonpay/wechat-session';
-          payload = { amount: amt, description: description || 'WeChat Pay' };
+        case 'checkout_session':
+          endpoint = '/api/v1/magpie/checkout/sessions';
+          payload = {
+            amount: amt,
+            payment_method_types: ['card', 'gcash', 'maya'],
+            line_items: [{ name: description || 'Payment', amount: Math.round(amt * 100), quantity: 1 }],
+            mode: 'payment',
+            success_url: successUrl || `${window.location.origin}/magpie-success`,
+            cancel_url: cancelUrl || `${window.location.origin}/`,
+            currency: 'php',
+            customer_email: customerEmail,
+            description,
+          };
           break;
       }
 
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+          ...(apiKey.trim() ? { 'X-API-Key': apiKey.trim() } : {}),
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -100,11 +115,19 @@ export default function PaymentsHub() {
     invoice: { icon: <FileText className="h-4 w-4" />, color: 'text-blue-400' },
     qr_code: { icon: <QrCode className="h-4 w-4" />, color: 'text-purple-400' },
     payment_link: { icon: <LinkIcon className="h-4 w-4" />, color: 'text-cyan-400' },
-    virtual_account: { icon: <Building2 className="h-4 w-4" />, color: 'text-emerald-400' },
-    ewallet: { icon: <Smartphone className="h-4 w-4" />, color: 'text-orange-400' },
-    alipay: { icon: <QrCode className="h-4 w-4" />, color: 'text-red-400' },
-    wechat: { icon: <QrCode className="h-4 w-4" />, color: 'text-green-400' },
+    checkout_session: { icon: <CreditCard className="h-4 w-4" />, color: 'text-emerald-400' },
   };
+
+  if (!canAccessPayments) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto rounded-2xl border border-red-200 bg-red-50/80 p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-semibold text-red-700">Access restricted</h1>
+          <p className="mt-3 text-sm text-red-600">Only users with payment management permission can create payment collection links here.</p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -136,7 +159,7 @@ export default function PaymentsHub() {
                     className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
                 </div>
 
-                {(tab === 'invoice' || tab === 'qr_code' || tab === 'payment_link' || tab === 'alipay' || tab === 'wechat') && (
+                {(tab === 'invoice' || tab === 'qr_code' || tab === 'payment_link') && (
                   <div>
                     <Label className="text-muted-foreground">Description</Label>
                     <Textarea placeholder="Payment description..." value={description}
@@ -145,7 +168,38 @@ export default function PaymentsHub() {
                   </div>
                 )}
 
-                {(tab === 'invoice' || tab === 'payment_link' || tab === 'virtual_account') && (
+                {tab === 'checkout_session' && (
+                  <div>
+                    <Label className="text-muted-foreground">Description</Label>
+                    <Textarea placeholder="Session description..." value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none" rows={2} />
+
+                    <Label className="text-muted-foreground mt-3">Success URL</Label>
+                    <Input placeholder="https://your-app.example.com/magpie-success" value={successUrl}
+                      onChange={(e) => setSuccessUrl(e.target.value)}
+                      className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground mt-1">If left blank, defaults to <code>/magpie-success</code> on this host.</p>
+
+                    <Label className="text-muted-foreground mt-3">Cancel URL</Label>
+                    <Input placeholder="https://your-app.example.com/cancel" value={cancelUrl}
+                      onChange={(e) => setCancelUrl(e.target.value)}
+                      className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-muted-foreground">Magpie/Xend API Key (optional)</Label>
+                  <Input
+                    placeholder="xend_live_..."
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">If provided, requests send <code>X-API-Key</code> for direct integration auth.</p>
+                </div>
+
+                {(tab === 'invoice' || tab === 'payment_link') && (
                   <div>
                     <Label className="text-muted-foreground">Customer Name</Label>
                     <Input placeholder="John Doe" value={customerName}
@@ -163,41 +217,6 @@ export default function PaymentsHub() {
                   </div>
                 )}
 
-                {tab === 'virtual_account' && (
-                  <div>
-                    <Label className="text-muted-foreground">Bank</Label>
-                    <Select value={bankCode} onValueChange={setBankCode}>
-                      <SelectTrigger className="mt-1 bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-muted border-border">
-                        {['BDO', 'BPI', 'UNIONBANK', 'RCBC', 'CHINABANK', 'PNB'].map(b => (
-                          <SelectItem key={b} value={b} className="text-foreground">{b}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {tab === 'ewallet' && (
-                  <>
-                    <div>
-                      <Label className="text-muted-foreground">E-Wallet Provider</Label>
-                      <Select value={ewalletProvider} onValueChange={setEwalletProvider}>
-                        <SelectTrigger className="mt-1 bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-muted border-border">
-                          {[['PH_GCASH', 'GCash'], ['PH_GRABPAY', 'GrabPay']].map(([v, l]) => (
-                            <SelectItem key={v} value={v} className="text-foreground">{l}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Mobile Number (optional)</Label>
-                      <Input placeholder="+639XXXXXXXXX" value={mobileNumber}
-                        onChange={(e) => setMobileNumber(e.target.value)}
-                        className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground" />
-                    </div>
-                  </>
-                )}
 
                 <Button onClick={handleCreate} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                   {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating...</> : <><Plus className="h-4 w-4 mr-2" />Create</>}

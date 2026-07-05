@@ -36,7 +36,7 @@ export const SettingsScreen = () => {
            <View style={styles.profileInfo}>
               <Text style={[styles.profileName, { color: colors.text }]}>{user?.username || 'xend User'}</Text>
               <Text style={[styles.profileRole, { color: colors.textSecondary }]}>
-                {user?.permissions?.is_super_admin ? 'Super Administrator' : 'Terminal Operator'}
+                {user?.permissions?.is_super_admin ? 'Super Administrator' : 'Account User'}
               </Text>
            </View>
         </View>
@@ -49,15 +49,14 @@ export const SettingsScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Terminal Settings</Text>
-          <SettingItem icon="devices" label="Manage Terminals" />
-          <SettingItem icon="receipt-long" label="Receipt Templates" />
-          <SettingItem icon="language" label="Payout Settings" />
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account Settings</Text>
+          <SettingItem icon="security" label="Login & Security" />
+          <SettingItem icon="notifications-none" label="Notifications" />
           {user?.permissions?.is_super_admin && (
             <SettingItem
               icon="admin-panel-settings"
-              label="System Logs (Maya Webhooks)"
-              onPress={() => Alert.alert('Maya Webhooks', 'No delivery failures recorded in the last 24 hours. Status: Healthy.')}
+              label="System Logs"
+              onPress={() => Alert.alert('System', 'No recent issues detected.')}
               color={common.primary}
             />
           )}

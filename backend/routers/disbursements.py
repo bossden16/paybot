@@ -131,9 +131,9 @@ async def approve_disbursements(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Approve a pending disbursement and trigger PayMongo payout."""
-    if not current_user.can_manage_disbursements:
-        raise HTTPException(status_code=403, detail="Not authorized to approve disbursements")
+    """Approve a pending disbursement and trigger Magpie payout."""
+    if not (current_user.permissions and current_user.permissions.is_super_admin):
+        raise HTTPException(status_code=403, detail="Super admin approval required for disbursements")
 
     service = DisbursementsService(db)
     disb = await service.get_by_id(id)
@@ -144,8 +144,8 @@ async def approve_disbursements(
         raise HTTPException(status_code=400, detail=f"Disbursement is already {disb.status}")
 
     try:
-        from services.paymongo_service import PayMongoService
-        pm = PayMongoService()
+        from services.magpie_service import MagpieService
+        pm = MagpieService()
 
         # Trigger the actual payout
         res = await pm.create_payout(
@@ -158,8 +158,8 @@ async def approve_disbursements(
         )
 
         if not res.get("success"):
-            error_msg = res.get("error", "Unknown PayMongo error")
-            logger.error(f"PayMongo payout failed: {error_msg}")
+            error_msg = res.get("error", "Unknown payout error")
+            logger.error(f"Magpie payout failed: {error_msg}")
 
             # Notify the bank via SMS even if it failed (as requested)
             try:

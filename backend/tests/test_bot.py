@@ -867,10 +867,10 @@ class TestUsdtQrImage:
 
 
 # ---------------------------------------------------------------------------
-# Maya Top-Up integration
+# Magpie Top-Up integration
 # ---------------------------------------------------------------------------
-class TestMayaTopUpIntegration:
-    """Verify Maya wallet top-up creates checkout-based invoices correctly."""
+class TestMagpieTopUpIntegration:
+    """Verify Magpie wallet top-up creates checkout-based invoices correctly."""
 
     def test_topup_uses_checkout_fields(self, client, auth_headers):
         mock_result = {
@@ -883,7 +883,7 @@ class TestMayaTopUpIntegration:
         async def fake_create_invoice(*args, **kwargs):
             return mock_result
 
-        with patch("routers.wallet.MayaService.create_invoice", new=fake_create_invoice):
+        with patch("routers.wallet.MagpieService.create_invoice", new=fake_create_invoice):
             r = client.post(
                 "/api/v1/wallet/topup",
                 headers=auth_headers,
@@ -903,12 +903,91 @@ class TestMayaTopUpIntegration:
         assert data["external_id"] == "maya-external-abc"
 
 
+class TestCheckoutSessionPayloads:
+    def test_checkout_session_includes_amount_in_magpie_payload(self, client, auth_headers):
+        captured: dict = {}
+
+        async def fake_create_session(self, *, payload):
+            captured.update(payload)
+            return {
+                "success": True,
+                "session_id": "session-123",
+                "payment_url": "https://example.com/pay",
+                "external_id": payload.get("external_id", "session-ext-123"),
+            }
+
+        with patch("services.magpie_service.MagpieService.create_session", new=fake_create_session):
+            r = client.post(
+                "/api/v1/magpie/checkout/sessions",
+                headers=auth_headers,
+                json={
+                    "payment_method_types": ["card", "gcash"],
+                    "line_items": [{"name": "Consulting", "amount": 2500, "quantity": 1}],
+                    "mode": "payment",
+                    "success_url": "https://example.com/success",
+                    "cancel_url": "https://example.com/cancel",
+                    "currency": "php",
+                    "customer_email": "test@example.com",
+                    "description": "Checkout session",
+                },
+            )
+
+        assert r.status_code == 200, r.text
+        assert captured.get("amount") == 25.0
+        assert captured.get("line_items", [{}])[0].get("amount") == 2500
+
+    def test_checkout_session_falls_back_to_checkout_when_session_endpoint_fails(self, client, auth_headers):
+        captured: dict = {}
+
+        async def fake_create_session(self, *, payload):
+            return {"success": False, "error": 'Magpie API error (500): {"message": "Internal server error"}'}
+
+        async def fake_create_checkout(self, **kwargs):
+            captured.update(kwargs)
+            return {
+                "success": True,
+                "checkout_id": "checkout-456",
+                "checkout_url": "https://example.com/checkout/456",
+                "external_id": kwargs.get("external_id", "checkout-ext-456"),
+            }
+
+        async def fake_create_transaction(self, *args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(id=567)
+
+        with patch("services.magpie_service.MagpieService.create_session", new=fake_create_session), patch(
+            "services.magpie_service.MagpieService.create_checkout", new=fake_create_checkout
+        ), patch("routers.magpie.TransactionsService.create_transaction", new=fake_create_transaction):
+            r = client.post(
+                "/api/v1/magpie/checkout/sessions",
+                headers=auth_headers,
+                json={
+                    "payment_method_types": ["card", "gcash"],
+                    "line_items": [{"name": "Consulting", "amount": 2500, "quantity": 1}],
+                    "mode": "payment",
+                    "success_url": "https://example.com/success",
+                    "cancel_url": "https://example.com/cancel",
+                    "currency": "php",
+                    "customer_email": "test@example.com",
+                    "description": "Checkout session",
+                },
+            )
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["success"] is True
+        assert body["data"]["checkout_id"] == "checkout-456"
+        assert captured.get("amount") == 25.0
+        assert captured.get("description") == "Checkout session"
+
+
 class TestXenditCollectionFallback:
-    def test_create_invoice_falls_back_to_maya_when_xendit_fails(self, client, auth_headers):
+    def test_create_invoice_falls_back_to_magpie_when_xendit_fails(self, client, auth_headers):
         async def fake_xendit_create_invoice(*args, **kwargs):
             return {"success": False, "error": "xendit bad request"}
 
-        async def fake_maya_create_checkout(*args, **kwargs):
+        async def fake_magpie_create_checkout(*args, **kwargs):
             return {
                 "success": True,
                 "checkout_id": "maya-checkout-456",
@@ -917,7 +996,7 @@ class TestXenditCollectionFallback:
             }
 
         with patch("routers.xendit.XenditService.create_invoice", new=fake_xendit_create_invoice), patch(
-            "services.maya_service.MayaService.create_checkout", new=fake_maya_create_checkout
+            "services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout
         ):
             r = client.post(
                 "/api/v1/xendit/create-invoice",
@@ -935,6 +1014,233 @@ class TestXenditCollectionFallback:
         assert data["success"] is True
         assert data["invoice_url"] == "https://maya.example.com/checkout/456"
         assert data["external_id"] == "maya-external-456"
+
+
+class TestxendDescriptorMerchantPropagation:
+    def test_create_invoice_forwards_descriptor_and_merchant_name(self, client, auth_headers):
+        captured: dict = {}
+
+        async def fake_magpie_create_checkout(self, *args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "success": True,
+                "checkout_id": "xend-checkout-123",
+                "checkout_url": "https://api.magpie.im/checkout/xend-123",
+                "external_id": kwargs.get("external_id", "xend-external-123"),
+            }
+
+        async def fake_create_transaction(self, *args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(id=999)
+
+        with patch("services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout), patch(
+            "routers.xend.TransactionsService.create_transaction", new=fake_create_transaction
+        ):
+            r = client.post(
+                "/api/v1/xend/create-invoice",
+                headers=auth_headers,
+                json={
+                    "amount": 250.0,
+                    "description": "Website subscription",
+                    "descriptor": "CLICK STORE PH",
+                    "merchant_name": "Click Store",
+                    "customer_name": "John Doe",
+                    "customer_email": "john@example.com",
+                    "payment_methods": ["gcash"],
+                },
+            )
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["success"] is True
+
+        # Regression check: ensure new fields are propagated to Magpie checkout payload.
+        assert captured.get("descriptor") == "CLICK STORE PH"
+        assert captured.get("merchant_name") == "Click Store"
+        assert captured.get("metadata", {}).get("descriptor") == "CLICK STORE PH"
+        assert captured.get("metadata", {}).get("merchant_name") == "Click Store"
+        assert captured.get("description", "").startswith("CLICK STORE PH")
+
+    def test_legacy_magpie_create_invoice_route_still_works(self, client, auth_headers):
+        captured: dict = {}
+
+        async def fake_magpie_create_checkout(self, *args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "success": True,
+                "checkout_id": "legacy-magpie-checkout-123",
+                "checkout_url": "https://api.magpie.im/checkout/legacy-123",
+                "external_id": kwargs.get("external_id", "legacy-magpie-external-123"),
+            }
+
+        async def fake_create_transaction(self, *args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(id=1001)
+
+        with patch("services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout), patch(
+            "routers.xend.TransactionsService.create_transaction", new=fake_create_transaction
+        ):
+            r = client.post(
+                "/api/v1/magpie/create-invoice",
+                headers=auth_headers,
+                json={
+                    "amount": 320.0,
+                    "description": "Legacy website invoice",
+                    "descriptor": "LEGACY SHOP",
+                    "merchant_name": "Legacy Store",
+                    "customer_name": "Jane Doe",
+                    "customer_email": "jane@example.com",
+                    "payment_methods": ["gcash"],
+                },
+            )
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["success"] is True
+        assert body["data"]["gateway"] == "magpie"
+
+        # Backward-compatible route should still propagate descriptor/merchant details.
+        assert captured.get("descriptor") == "LEGACY SHOP"
+        assert captured.get("merchant_name") == "Legacy Store"
+
+
+class TestPaymentApiKeyAuth:
+    def test_xend_create_invoice_returns_error_when_magpie_not_configured(self, client, auth_headers):
+        with patch("services.magpie_service.MagpieService.__init__", return_value=None):
+            response = client.post(
+                "/api/v1/xend/create-invoice",
+                headers=auth_headers,
+                json={
+                    "amount": 99.0,
+                    "description": "Missing config invoice",
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["success"] is False
+        assert "Magpie API key is not configured" in body["message"]
+
+    def test_xend_create_invoice_with_api_key_and_scope(self, client, auth_headers):
+        service_name = f"xend-int-{int(time.time() * 1000)}"
+        key_name = f"payment_api_key_int_{int(time.time() * 1000)}"
+        api_key_plain = f"xend_live_{int(time.time() * 1000)}_abcdefghijklmnop"
+
+        create_keys = client.post(
+            "/api/v1/entities/api_configs/batch",
+            headers=auth_headers,
+            json={
+                "items": [
+                    {
+                        "service_name": service_name,
+                        "config_key": key_name,
+                        "config_value": api_key_plain,
+                        "is_active": True,
+                    },
+                    {
+                        "service_name": service_name,
+                        "config_key": f"{key_name}_scopes",
+                        "config_value": "payments:write,payments:read",
+                        "is_active": True,
+                    },
+                ]
+            },
+        )
+        assert create_keys.status_code == 201, create_keys.text
+
+        captured: dict = {}
+
+        async def fake_magpie_create_checkout(self, *args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "success": True,
+                "checkout_id": "api-key-checkout-123",
+                "checkout_url": "https://api.magpie.im/checkout/apikey-123",
+                "external_id": kwargs.get("external_id", "api-key-ext-123"),
+            }
+
+        async def fake_create_transaction(self, *args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(id=2001)
+
+        with patch("services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout), patch(
+            "routers.xend.TransactionsService.create_transaction", new=fake_create_transaction
+        ):
+            response = client.post(
+                "/api/v1/xend/create-invoice",
+                headers={"X-API-Key": api_key_plain},
+                json={
+                    "amount": 199.0,
+                    "description": "API key invoice",
+                    "descriptor": "XEND TEST",
+                    "merchant_name": "Xend Test Store",
+                    "payment_methods": ["gcash"],
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["success"] is True
+        assert captured.get("merchant_name") == "Xend Test Store"
+
+    def test_xend_create_invoice_denied_when_scope_missing(self, client, auth_headers):
+        service_name = f"xend-int-{int(time.time() * 1000)}"
+        key_name = f"payment_api_key_ro_{int(time.time() * 1000)}"
+        api_key_plain = f"xend_live_ro_{int(time.time() * 1000)}_abcdefghijklmnop"
+
+        create_keys = client.post(
+            "/api/v1/entities/api_configs/batch",
+            headers=auth_headers,
+            json={
+                "items": [
+                    {
+                        "service_name": service_name,
+                        "config_key": key_name,
+                        "config_value": api_key_plain,
+                        "is_active": True,
+                    },
+                    {
+                        "service_name": service_name,
+                        "config_key": f"{key_name}_scopes",
+                        "config_value": "payments:read",
+                        "is_active": True,
+                    },
+                ]
+            },
+        )
+        assert create_keys.status_code == 201, create_keys.text
+
+        response = client.post(
+            "/api/v1/xend/create-invoice",
+            headers={"X-API-Key": api_key_plain},
+            json={
+                "amount": 199.0,
+                "description": "API key invoice denied",
+            },
+        )
+        assert response.status_code == 403
+        assert "missing required scope" in response.json().get("detail", "")
+
+
+class TestWalletBalanceConsistency:
+    @pytest.mark.asyncio
+    async def test_wallet_service_normalizes_integer_user_ids(self):
+        from services.database import initialize_database
+        from core.database import db_manager
+        from services.wallets import WalletsService
+
+        await initialize_database()
+
+        async with db_manager.async_session_maker() as session:
+            service = WalletsService(session)
+            wallet_a = await service.get_or_create_wallet(123456789, "PHP")
+            wallet_b = await service.get_or_create_wallet("123456789", "PHP")
+
+            assert wallet_a.id == wallet_b.id
+            assert wallet_a.user_id == "123456789"
 
 
 class TestEvents:
@@ -1164,6 +1470,39 @@ class TestBatchCreateOptimization:
         data = r.json()
         assert len(data) == 2
 
+    def test_api_key_scope_rejects_invalid_scope(self, client, auth_headers):
+        """Creating *_scopes config should fail on unknown scope names."""
+        payload = {
+            "config_key": "payment_api_key_test_scopes",
+            "config_value": "payments:read,unknown:scope",
+            "service_name": f"devscope-invalid-{int(time.time() * 1000)}",
+            "is_active": True,
+        }
+        r = client.post("/api/v1/entities/api_configs", json=payload, headers=auth_headers)
+        assert r.status_code == 400
+        assert "Invalid API key scopes" in r.json().get("detail", "")
+
+    def test_api_key_scope_normalizes_and_saves(self, client, auth_headers):
+        """Creating *_scopes config should normalize deduped scopes in sorted order."""
+        service_name = f"devscope-valid-{int(time.time() * 1000)}"
+        payload = {
+            "config_key": "payment_api_key_test_scopes",
+            "config_value": "payments:write,payments:read,payments:read,webhooks:manage",
+            "service_name": service_name,
+            "is_active": True,
+        }
+        r = client.post("/api/v1/entities/api_configs", json=payload, headers=auth_headers)
+        assert r.status_code == 201
+        created = r.json()
+
+        r2 = client.get(
+            f"/api/v1/entities/api_configs/{created['id']}?reveal=true",
+            headers=auth_headers,
+        )
+        assert r2.status_code == 200
+        body = r2.json()
+        assert body["config_value"] == "payments:read,payments:write,webhooks:manage"
+
 
 class TestUsdBalanceOptimization:
     """Verify USD balance is computed correctly with the single-query optimization."""
@@ -1358,6 +1697,152 @@ class TestKybAccessControl:
         assert admin is not None
         assert admin.is_active is True
         assert admin.is_super_admin is False  # KYB users are regular admins, not super admin
+
+    def test_kyb_approve_invited_user_inherits_inviter_organization(self, client, auth_headers):
+        """Approving invited KYB user should assign inviter's org and mark invitation accepted."""
+        from sqlalchemy import select
+        from core.database import db_manager
+        from models.kyb_registrations import KybRegistration
+        from models.team_invitations import TeamInvitation
+        from models.admin_users import AdminUser
+
+        suffix = int(time.time() * 1000)
+        invite_email = f"invitee_{suffix}@example.com"
+        target_chat_id = f"web-invite-{suffix}"
+        org_id = f"org-invite-{suffix}"
+        org_name = "Inviter Org Regression"
+
+        async def seed_records():
+            async with db_manager.async_session_maker() as db:
+                await db.run_sync(
+                    lambda sync_db: TeamInvitation.__table__.create(
+                        bind=sync_db.bind,
+                        checkfirst=True,
+                    )
+                )
+                invitation = TeamInvitation(
+                    email=invite_email,
+                    invitation_token=f"token-{suffix}",
+                    role="editor",
+                    status="pending",
+                    invited_by="123456789",
+                    organization_id=org_id,
+                    organization_name=org_name,
+                    permissions={
+                        "can_add_delete_user": False,
+                        "can_edit_user_access": False,
+                        "can_edit_business_settings": False,
+                        "can_add_edit_delete_cards_promotion": False,
+                        "can_upload_delete_batch_disbursements": True,
+                        "can_validate_batch_disbursements": True,
+                        "can_generate_invoice": True,
+                        "can_add_edit_customers": True,
+                        "can_view_transaction_details": False,
+                        "can_download_csv_report": False,
+                        "can_withdraw_funds": False,
+                        "can_create_transfers": False,
+                        "can_add_edit_delete_withdrawal_account": False,
+                        "can_see_api_keys": False,
+                        "can_resend_callbacks": False,
+                        "can_change_callback_urls": False,
+                        "can_approve_batch_disbursements": False,
+                        "can_refund_cards_charges": False,
+                        "can_manage_team": False,
+                    },
+                )
+                kyb = KybRegistration(
+                    chat_id=target_chat_id,
+                    telegram_username=f"invitee_{suffix}",
+                    step="done",
+                    full_name="Invited User",
+                    email=invite_email,
+                    phone="09171234567",
+                    address="Test Address",
+                    bank_name="Invitee Business",
+                    status="pending_review",
+                )
+                db.add(invitation)
+                db.add(kyb)
+                await db.commit()
+                await db.refresh(kyb)
+                return kyb.id
+
+        kyb_id = asyncio.run(seed_records())
+
+        approve = client.post(
+            f"/api/v1/kyb/{kyb_id}/approve",
+            json={"note": "approve invited user"},
+            headers=auth_headers,
+        )
+        assert approve.status_code == 200
+
+        async def verify_assignment():
+            async with db_manager.async_session_maker() as db:
+                admin_res = await db.execute(select(AdminUser).where(AdminUser.telegram_id == target_chat_id))
+                admin = admin_res.scalar_one_or_none()
+                inv_res = await db.execute(select(TeamInvitation).where(TeamInvitation.email == invite_email))
+                invitation = inv_res.scalar_one_or_none()
+                return admin, invitation
+
+        admin, invitation = asyncio.run(verify_assignment())
+
+        assert admin is not None
+        assert admin.organization_id == org_id
+        assert admin.organization_name == org_name
+        assert invitation is not None
+        assert invitation.status == "accepted"
+        assert invitation.accepted_at is not None
+
+    def test_super_admin_can_invite_owner_with_new_organization(self, client, auth_headers):
+        """Super admin can set org info and invite an owner in one API call."""
+        from core.database import db_manager
+        from models.team_invitations import TeamInvitation
+        from sqlalchemy import select
+
+        suffix = int(time.time() * 1000)
+        invite_email = f"owner_invite_{suffix}@example.com"
+        org_name = f"Acme Holdings {suffix}"
+
+        async def ensure_invitation_table():
+            async with db_manager.async_session_maker() as db:
+                await db.run_sync(
+                    lambda sync_db: TeamInvitation.__table__.create(
+                        bind=sync_db.bind,
+                        checkfirst=True,
+                    )
+                )
+
+        asyncio.run(ensure_invitation_table())
+
+        response = client.post(
+            "/api/v1/team/invite",
+            json={
+                "email": invite_email,
+                "role": "owner",
+                "organization_name": org_name,
+                "notes": "Initial org owner invite",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["role"] == "owner"
+        assert body["organization_name"] == org_name
+        assert body["organization_id"].startswith("acme-holdings")
+
+        async def read_invitation():
+            async with db_manager.async_session_maker() as db:
+                inv_res = await db.execute(select(TeamInvitation).where(TeamInvitation.email == invite_email))
+                return inv_res.scalar_one_or_none()
+
+        invitation = asyncio.run(read_invitation())
+        assert invitation is not None
+        assert invitation.organization_name == org_name
+        assert invitation.organization_id is not None
+        assert invitation.role == "owner"
+        assert invitation.permissions.get("can_manage_team") is True
+        assert invitation.permissions.get("can_see_api_keys") is True
 
 
 

@@ -47,15 +47,14 @@ export const PinLockScreen = ({ onUnlock, onLogout }) => {
 
   const verifyPin = async () => {
     try {
-      const terminalId = await AsyncStorage.getItem('terminal_id');
       const token = await AsyncStorage.getItem('auth_token');
 
-      if (!terminalId || !token) {
+      if (!token) {
         onLogout();
         return;
       }
 
-      const response = await fetch(`${Config.API_BASE_URL}/pos-terminals/${terminalId}/pin/verify`, {
+      const response = await fetch(`${Config.API_BASE_URL}/wallet/pin/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

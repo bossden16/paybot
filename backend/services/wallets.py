@@ -20,12 +20,31 @@ logger = logging.getLogger(__name__)
 # Credit/debit type categories for USD balance computation
 _USD_CREDIT_TYPES = ("crypto_topup", "usd_receive", "admin_credit")
 _USD_DEBIT_TYPES = ("usdt_send", "usd_send", "admin_debit")
+PHP_SECURITY_DEPOSIT_MIN = 50000.0
 
 class WalletsService:
     """Enhanced service layer for Wallets operations with integrated business logic."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _normalize_user_id(user_id: Any, currency: str = "PHP") -> str:
+        """Normalize wallet user IDs so bot and dashboard share the same row."""
+        if user_id is None:
+            raise ValueError("user_id is required")
+
+        normalized = str(user_id).strip()
+        if not normalized:
+            raise ValueError("user_id is required")
+
+        currency_upper = (currency or "PHP").upper()
+        if currency_upper == "PHP" and normalized.startswith("tg-"):
+            normalized = normalized[3:]
+        elif currency_upper == "USD" and not normalized.startswith("tg-"):
+            normalized = f"tg-{normalized}"
+
+        return normalized
 
     async def get_or_create_wallet(self, user_id: str, currency: str = "PHP", lock: bool = False) -> Wallets:
         """Get user's wallet for a given currency, or create one with 0 balance.
@@ -35,11 +54,7 @@ class WalletsService:
         to the normalized ID when found.
         """
         currency_upper = currency.upper()
-        normalized_user_id = user_id.strip()
-
-        # PHP wallets migration logic: "tg-123" -> "123"
-        if currency_upper == "PHP" and normalized_user_id.startswith("tg-"):
-            normalized_user_id = normalized_user_id[3:]
+        normalized_user_id = self._normalize_user_id(user_id, currency_upper)
 
         query = select(Wallets).where(
             Wallets.user_id == normalized_user_id,
@@ -82,8 +97,14 @@ class WalletsService:
 
         if not wallet:
             now = datetime.now(timezone.utc)
+            org_id = None
+            admin_res = await self.db.execute(select(AdminUser).where(AdminUser.telegram_id == normalized_user_id))
+            admin_user = admin_res.scalar_one_or_none()
+            if admin_user and admin_user.organization_id:
+                org_id = admin_user.organization_id
             wallet = Wallets(
                 user_id=normalized_user_id,
+                organization_id=org_id,
                 balance=0.0,
                 currency=currency_upper,
                 created_at=now,
@@ -96,6 +117,46 @@ class WalletsService:
                 return await self.get_or_create_wallet(normalized_user_id, currency_upper, lock=True)
             logger.info(f"Created new {currency_upper} wallet for user {normalized_user_id}")
 
+        return wallet
+
+    async def get_or_create_organization_wallet(
+        self, organization_id: str, currency: str = "PHP", lock: bool = False
+    ) -> Wallets:
+        """Get or create the dedicated organization wallet row."""
+        if not organization_id:
+            raise ValueError("organization_id is required")
+
+        normalized_org_id = organization_id.strip()
+        currency_upper = currency.upper()
+        org_wallet_user_id = f"org:{normalized_org_id}"
+
+        query = select(Wallets).where(
+            Wallets.user_id == org_wallet_user_id,
+            Wallets.currency == currency_upper,
+        )
+        if lock:
+            query = query.with_for_update()
+
+        result = await self.db.execute(query)
+        wallet = result.scalar_one_or_none()
+        if wallet:
+            return wallet
+
+        now = datetime.now(timezone.utc)
+        wallet = Wallets(
+            user_id=org_wallet_user_id,
+            organization_id=normalized_org_id,
+            balance=0.0,
+            available_balance=0.0,
+            pending_balance=0.0,
+            currency=currency_upper,
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(wallet)
+        await self.db.flush()
+        if lock:
+            return await self.get_or_create_organization_wallet(normalized_org_id, currency_upper, lock=True)
         return wallet
 
     async def compute_usd_balance(self, user_id: str) -> float:
@@ -139,18 +200,18 @@ class WalletsService:
         """Get wallet balance. For USD, it ensures the balance field is synced with history."""
         currency_upper = currency.upper()
 
+        normalized_user_id = self._normalize_user_id(user_id, currency_upper)
+
         if currency_upper == "USD":
-            # USD wallets use "tg-" prefix internally (heritage from bot)
-            tg_user_id = f"tg-{user_id}" if not user_id.startswith("tg-") else user_id
-            computed = await self.compute_usd_balance(tg_user_id)
-            wallet = await self.get_or_create_wallet(tg_user_id, "USD")
-            
+            computed = await self.compute_usd_balance(normalized_user_id)
+            wallet = await self.get_or_create_wallet(normalized_user_id, "USD")
+
             if abs(computed - wallet.balance) > 0.001:
                 wallet.balance = computed
                 wallet.updated_at = datetime.now(timezone.utc)
                 await self.db.commit()
                 await self.db.refresh(wallet)
-            
+
             return {
                 "wallet_id": wallet.id,
                 "balance": wallet.balance,
@@ -159,7 +220,7 @@ class WalletsService:
                 "currency": "USD"
             }
 
-        wallet = await self.get_or_create_wallet(user_id, currency_upper)
+        wallet = await self.get_or_create_wallet(normalized_user_id, currency_upper)
         return {
             "wallet_id": wallet.id,
             "balance": wallet.balance,
@@ -285,6 +346,20 @@ class WalletsService:
 
         # Lock wallet for withdrawal processing
         wallet = await self.get_or_create_wallet(user_id, "PHP", lock=True)
+
+        current_balance = float(wallet.balance or 0.0)
+        if current_balance < PHP_SECURITY_DEPOSIT_MIN:
+            raise ValueError(
+                "Withdrawal/disbursement denied: account balance is below the required "
+                f"security deposit of PHP {PHP_SECURITY_DEPOSIT_MIN:,.2f}."
+            )
+
+        max_withdrawable_by_deposit = max(0.0, round(current_balance - PHP_SECURITY_DEPOSIT_MIN, 2))
+        if amount > max_withdrawable_by_deposit:
+            raise ValueError(
+                "Withdrawal/disbursement denied: only the excess above the PHP 50,000.00 "
+                f"security deposit is withdrawable (max available: PHP {max_withdrawable_by_deposit:,.2f})."
+            )
 
         # Ensure liquidity check against available_balance
         if wallet.available_balance < amount:

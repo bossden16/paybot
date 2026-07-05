@@ -14,30 +14,38 @@ services:
     healthCheckPath: /health
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        sync: false
+        value: replace-with-production-telegram-bot-token
       - key: TELEGRAM_BOT_USERNAME
-        sync: false
+        value: replace-with-production-telegram-username
       - key: TELEGRAM_ADMIN_IDS
-        sync: false
+        value: replace-with-production-admin-user-id
       - key: JWT_SECRET_KEY
-        sync: false
+        value: replace-with-production-jwt-secret
       - key: XENDIT_SECRET_KEY
-        sync: false
+        value: replace-with-production-xendit-secret
       - key: PAYMONGO_SECRET_KEY
-        sync: false
+        value: replace-with-production-paymongo-secret
       - key: PAYMONGO_PUBLIC_KEY
-        sync: false
+        value: replace-with-production-paymongo-public-key
+      - key: MAGPIE_API_KEY
+        value: replace-with-production-magpie-api-key
+      - key: MAGPIE_WEBHOOK_SECRET
+        value: replace-with-production-magpie-webhook-secret
+      - key: MAGPIE_MODE
+        value: live
+      - key: MAGPIE_BASE_URL
+        value: https://api.magpie.im
       - key: DATABASE_URL
         sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://your-frontend-domain.example
 
-# Managed database for the service. After creation, copy the connection string into the
-# DATABASE_URL env var (or let Render link the database to the service automatically).
 databases:
   - name: paybot-db
     plan: starter
 
-# Optional one-off job to run DB migrations. You can run this manually from the Render UI
-# or enable it as a deploy hook. Adjust the alembic config path if needed.
 jobs:
   - name: migrate-database
     type: job

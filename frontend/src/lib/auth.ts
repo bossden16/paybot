@@ -38,6 +38,8 @@ export const authApi = {
           email: data.email || '',
           name: data.name || data.email || '',
           role: data.role || 'user',
+          organization_id: data.organization_id ?? undefined,
+          organization_name: data.organization_name ?? undefined,
           permissions: data.permissions ?? undefined,
         };
       }
@@ -48,7 +50,7 @@ export const authApi = {
   },
 
   async login(email: string, password: string) {
-    const response = await fetch('/api/v1/auth/terminal-login', {
+    const response = await fetch('/api/v1/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

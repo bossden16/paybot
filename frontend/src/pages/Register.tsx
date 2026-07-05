@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShieldCheck, CheckCircle, AlertCircle, User, Phone, Mail, MapPin, Building2, Send } from 'lucide-react';
+import { ShieldCheck, CheckCircle, AlertCircle, User, Phone, Mail, MapPin, Building2, Send, CheckIcon, XIcon } from 'lucide-react';
+import { z } from 'zod';
 import { APP_NAME, COMPANY_NAME } from '@/lib/brand';
+import { registerSchema, getFieldError, type RegisterFormData } from '@/lib/validation';
 
 interface FormData {
   full_name: string;
@@ -10,6 +12,16 @@ interface FormData {
   address: string;
   business_name: string;
   telegram_username: string;
+}
+
+interface FormErrors {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  business_name?: string;
+  telegram_username?: string;
+  general?: string;
 }
 
 interface SocialConfig {
@@ -64,12 +76,13 @@ function MessengerIcon({ size = 20 }: { size?: number }) {
 export default function Register() {
   const navigate = useNavigate();
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [kybId, setKybId] = useState<number | null>(null);
   const [kycId, setKycId] = useState<string | null>(null);
   const [socialConfig, setSocialConfig] = useState<SocialConfig | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch('/api/v1/auth/social-config')
@@ -80,43 +93,80 @@ export default function Register() {
 
   const handleChange = (field: keyof FormData, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors((e) => ({ ...e, [field]: undefined }));
+    }
+  };
+
+  const handleBlur = (field: keyof FormData) => {
+    setTouched((t) => ({ ...t, [field]: true }));
+    
+    // Validate single field
+    const fieldSchema = registerSchema.pick({ [field]: true });
+    const result = fieldSchema.safeParse({ [field]: form[field] });
+    
+    if (!result.success) {
+      const error = result.error.issues[0]?.message;
+      setErrors((e) => ({ ...e, [field]: error }));
+    } else {
+      setErrors((e) => ({ ...e, [field]: undefined }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.full_name.trim() || !form.email.trim() || !form.phone.trim()) {
-      setError('Full name, email, and phone are required.');
+    
+    // Mark all fields as touched
+    setTouched({
+      full_name: true,
+      email: true,
+      phone: true,
+      business_name: true,
+      address: true,
+      telegram_username: true,
+    });
+    
+    // Validate entire form
+    const result = registerSchema.safeParse(form);
+    
+    if (!result.success) {
+      const fieldErrors: FormErrors = {};
+      result.error.issues.forEach((issue) => {
+        const field = issue.path[0] as keyof FormData;
+        fieldErrors[field] = issue.message;
+      });
+      setErrors(fieldErrors);
       return;
     }
-    if (!form.telegram_username.trim()) {
-      setError('Telegram username is required to link your account after approval.');
-      return;
-    }
+
+    const validatedData = result.data;
     setSubmitting(true);
-    setError(null);
+    setErrors({});
+    
     try {
       const res = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          full_name: form.full_name.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          address: form.address.trim() || null,
-          business_name: form.business_name.trim() || null,
-          telegram_username: form.telegram_username.trim(),
+          full_name: validatedData.full_name,
+          email: validatedData.email,
+          phone: validatedData.phone,
+          address: validatedData.address,
+          business_name: validatedData.business_name,
+          telegram_username: validatedData.telegram_username,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data?.detail ?? 'Registration failed. Please try again.');
+        setErrors({ general: data?.detail ?? 'Registration failed. Please try again.' });
       } else {
         setSuccess(true);
         setKybId(data.kyb_id);
         setKycId(data.xendit_customer_id ?? null);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Network error. Please try again.');
+      setErrors({ general: err instanceof Error ? err.message : 'Network error. Please try again.' });
     } finally {
       setSubmitting(false);
     }
@@ -188,8 +238,8 @@ export default function Register() {
           <div className="space-y-4">
             {[
               { step: '1', label: 'Submit your information', desc: 'Fill in name, email, phone, and Telegram username' },
-              { step: '2', label: 'KYC verification', desc: `Your identity is verified via the ${APP_NAME} KYC platform` },
-              { step: '3', label: 'Admin review & approval', desc: 'A super admin reviews and approves your application' },
+              { step: '2', label: 'Identity verification', desc: 'Your information is reviewed via our secure KYC process' },
+              { step: '3', label: 'Account review', desc: 'An admin reviews and approves your application' },
               { step: '4', label: 'Dashboard access granted', desc: 'Sign in with Telegram once approved' },
             ].map((s) => (
               <div key={s.step} className="flex items-start gap-3">
@@ -229,10 +279,10 @@ export default function Register() {
             <p className="text-muted-foreground text-sm">Submit your KYC application for admin access.</p>
           </div>
 
-          {error && (
+          {errors.general && (
             <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2 text-red-600 text-sm">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
+              {errors.general}
             </div>
           )}
 
@@ -246,11 +296,19 @@ export default function Register() {
                   type="text"
                   value={form.full_name}
                   onChange={(e) => handleChange('full_name', e.target.value)}
+                  onBlur={() => handleBlur('full_name')}
                   placeholder="Juan dela Cruz"
                   required
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors"
+                  className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-0 transition-colors ${
+                    errors.full_name ? 'border-red-500' : 'border-border focus:border-primary/50'
+                  }`}
                 />
               </div>
+              {errors.full_name && (
+                <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
+                  <XIcon className="h-3 w-3" /> {errors.full_name}
+                </p>
+              )}
             </div>
 
             {/* Email */}
@@ -262,11 +320,19 @@ export default function Register() {
                   type="email"
                   value={form.email}
                   onChange={(e) => handleChange('email', e.target.value)}
+                  onBlur={() => handleBlur('email')}
                   placeholder="juan@example.com"
                   required
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors"
+                  className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-0 transition-colors ${
+                    errors.email ? 'border-red-500' : 'border-border focus:border-primary/50'
+                  }`}
                 />
               </div>
+              {errors.email && (
+                <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
+                  <XIcon className="h-3 w-3" /> {errors.email}
+                </p>
+              )}
             </div>
 
             {/* Phone */}
@@ -278,11 +344,24 @@ export default function Register() {
                   type="tel"
                   value={form.phone}
                   onChange={(e) => handleChange('phone', e.target.value)}
+                  onBlur={() => handleBlur('phone')}
                   placeholder="09171234567"
                   required
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors"
+                  className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-0 transition-colors ${
+                    errors.phone ? 'border-red-500' : 'border-border focus:border-primary/50'
+                  }`}
                 />
               </div>
+              {errors.phone && (
+                <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
+                  <XIcon className="h-3 w-3" /> {errors.phone}
+                </p>
+              )}
+              {!errors.phone && touched.phone && form.phone && (
+                <p className="text-emerald-600 text-xs mt-1.5 flex items-center gap-1">
+                  <CheckIcon className="h-3 w-3" /> Valid phone number
+                </p>
+              )}
             </div>
 
             {/* Business name */}
@@ -294,10 +373,18 @@ export default function Register() {
                   type="text"
                   value={form.business_name}
                   onChange={(e) => handleChange('business_name', e.target.value)}
+                  onBlur={() => handleBlur('business_name')}
                   placeholder="Your business name"
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors"
+                  className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-0 transition-colors ${
+                    errors.business_name ? 'border-red-500' : 'border-border focus:border-primary/50'
+                  }`}
                 />
               </div>
+              {errors.business_name && (
+                <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
+                  <XIcon className="h-3 w-3" /> {errors.business_name}
+                </p>
+              )}
             </div>
 
             {/* Address */}
@@ -308,11 +395,19 @@ export default function Register() {
                 <textarea
                   value={form.address}
                   onChange={(e) => handleChange('address', e.target.value)}
+                  onBlur={() => handleBlur('address')}
                   placeholder="123 Main St, Makati City, Metro Manila"
                   rows={2}
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors resize-none"
+                  className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-0 transition-colors resize-none ${
+                    errors.address ? 'border-red-500' : 'border-border focus:border-primary/50'
+                  }`}
                 />
               </div>
+              {errors.address && (
+                <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
+                  <XIcon className="h-3 w-3" /> {errors.address}
+                </p>
+              )}
             </div>
 
             {/* Telegram username */}
@@ -324,11 +419,24 @@ export default function Register() {
                   type="text"
                   value={form.telegram_username}
                   onChange={(e) => handleChange('telegram_username', e.target.value)}
+                  onBlur={() => handleBlur('telegram_username')}
                   placeholder="@yourusername"
                   required
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-0 transition-colors"
+                  className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-0 transition-colors ${
+                    errors.telegram_username ? 'border-red-500' : 'border-border focus:border-primary/50'
+                  }`}
                 />
               </div>
+              {errors.telegram_username && (
+                <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
+                  <XIcon className="h-3 w-3" /> {errors.telegram_username}
+                </p>
+              )}
+              {!errors.telegram_username && touched.telegram_username && form.telegram_username && (
+                <p className="text-emerald-600 text-xs mt-1.5 flex items-center gap-1">
+                  <CheckIcon className="h-3 w-3" /> Valid Telegram username
+                </p>
+              )}
               <p className="text-muted-foreground text-[10px] mt-1.5 ml-1">Required to link and notify your Telegram account after approval.</p>
             </div>
 
@@ -336,7 +444,7 @@ export default function Register() {
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
               <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
               <p className="text-muted-foreground text-xs">
-                Your identity will be verified via the <span className="text-blue-600 font-semibold">{APP_NAME} KYC platform</span>.
+                Your submitted information will be reviewed as part of our <span className="text-blue-600 font-semibold">KYC verification process</span>.
               </p>
             </div>
 

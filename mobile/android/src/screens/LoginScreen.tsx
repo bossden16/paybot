@@ -53,17 +53,14 @@ export const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${Config.API_BASE_URL}/auth/terminal-login`, {
+      const response = await fetch(`${Config.API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, device_id: deviceId }),
+        body: JSON.stringify({ email, password }),
       });
 
       const result = await response.json();
       if (response.ok && result.access_token) {
-        if (result.terminal_id) {
-           await AsyncStorage.setItem('terminal_id', result.terminal_id.toString());
-        }
         await AsyncStorage.setItem('has_pin', result.has_pin ? 'true' : 'false');
         await signIn(result.access_token);
       } else {
@@ -95,9 +92,6 @@ export const LoginScreen = ({ navigation }) => {
       if (!response.ok) throw new Error(result.detail || 'Handshake failed');
 
       if (result.token) {
-         if (result.terminal_id) {
-            await AsyncStorage.setItem('terminal_id', result.terminal_id.toString());
-         }
          await AsyncStorage.setItem('has_pin', result.has_pin ? 'true' : 'false');
 
          // Success: Switch to dashboard

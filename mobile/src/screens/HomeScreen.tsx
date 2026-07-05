@@ -23,17 +23,6 @@ import { useTheme } from '../theme';
 const { width } = Dimensions.get('window');
 
 const api = {
-  getTerminals: async (token) => {
-    const response = await fetch(`${API_URL}/pos-terminals/`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch terminals');
-    return response.json();
-  },
-
   getBalance: async (token) => {
     const response = await fetch(`${API_URL}/wallet/balance?currency=PHP`, {
       headers: {
@@ -45,16 +34,13 @@ const api = {
     return response.json();
   },
 
-  getTransactions: async (token, terminalId) => {
-    const response = await fetch(
-      `${API_URL}/pos-terminals/${terminalId}/transactions?per_page=10`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+  getTransactions: async (token) => {
+    const response = await fetch(`${API_URL}/wallet/transactions?per_page=10`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
     if (!response.ok) throw new Error('Failed to fetch transactions');
     return response.json();
   },
@@ -141,57 +127,6 @@ const TrustBanner = () => {
   );
 };
 
-const TerminalCard = ({ terminal, onPress, isSelected }) => {
-  const { colors, common, shadows, roundness } = useTheme();
-
-  return (
-    <TouchableOpacity
-      style={[
-        styles.terminalCard,
-        {
-          backgroundColor: isSelected ? (useTheme().isDark ? '#1E293B' : '#F0F9FF') : colors.card,
-          borderColor: isSelected ? common.primary : colors.border,
-          borderRadius: roundness.lg,
-          ...shadows.sm
-        },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.terminalHeader}>
-        <View style={styles.terminalInfo}>
-          <Text style={[styles.terminalName, { color: colors.text }]}>{terminal.terminal_name}</Text>
-          <Text style={[styles.terminalCode, { color: colors.textSecondary }]}>ID: {terminal.terminal_code}</Text>
-          {terminal.is_t0_settlement && (
-            <View style={[styles.t0Badge, { backgroundColor: '#FEF3C7' }]}>
-              <MaterialIcons name="bolt" size={12} color="#D97706" />
-              <Text style={styles.t0Text}>ULTRA SETTLEMENT</Text>
-            </View>
-          )}
-        </View>
-        <StatusBadge status={terminal.is_active ? 'active' : 'inactive'} />
-      </View>
-
-      <View style={styles.methodsList}>
-        {terminal.enabled_payment_methods.slice(0, 3).map((method, idx) => (
-          <View key={idx} style={[styles.methodBadge, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.methodText, { color: common.primary }]}>{method.toUpperCase()}</Text>
-          </View>
-        ))}
-        {terminal.enabled_payment_methods.length > 3 && (
-          <Text style={[styles.moreText, { color: colors.textSecondary }]}>+{terminal.enabled_payment_methods.length - 3}</Text>
-        )}
-      </View>
-
-      {isSelected && (
-        <View style={styles.selectionIndicator}>
-          <MaterialIcons name="check-circle" size={24} color={common.primary} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-};
-
 const TransactionItem = ({ transaction }) => {
   const { colors, common, roundness } = useTheme();
   const getStatusIcon = (status) => {
@@ -251,7 +186,6 @@ const NavButton = ({ icon, label, onPress, color }) => {
 export const HomeScreen = ({ navigation }) => {
   const { colors, common, isDark } = useTheme();
   const [token, setToken] = useState(null);
-  const [selectedTerminal, setSelectedTerminal] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = React.useRef(new Animated.Value(0)).current;
 
@@ -271,24 +205,11 @@ export const HomeScreen = ({ navigation }) => {
     }
   );
 
-  const terminalsQuery = useQuery(
-    ['terminals', token],
-    () => api.getTerminals(token),
+  const transactionsQuery = useQuery(
+    ['transactions', token],
+    () => api.getTransactions(token),
     {
       enabled: !!token,
-      onSuccess: (data) => {
-        if (data?.data?.length > 0 && !selectedTerminal) {
-          setSelectedTerminal(data.data[0]);
-        }
-      }
-    }
-  );
-
-  const transactionsQuery = useQuery(
-    ['transactions', selectedTerminal?.id, token],
-    () => api.getTransactions(token, selectedTerminal.id),
-    {
-      enabled: !!token && !!selectedTerminal,
     }
   );
 
@@ -296,7 +217,6 @@ export const HomeScreen = ({ navigation }) => {
     setRefreshing(true);
     await Promise.all([
       balanceQuery.refetch(),
-      terminalsQuery.refetch(),
       transactionsQuery.refetch(),
     ]);
     setRefreshing(false);
@@ -367,65 +287,7 @@ export const HomeScreen = ({ navigation }) => {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>POS Terminals</Text>
-            <TouchableOpacity onPress={() => terminalsQuery.refetch()}>
-              <MaterialIcons name="refresh" size={20} color={common.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {terminalsQuery.isLoading && !terminalsQuery.data ? (
-            <ActivityIndicator size="large" color={common.primary} style={{ marginVertical: 20 }} />
-          ) : terminalsQuery.data?.data?.length > 0 ? (
-            <FlatList
-              data={terminalsQuery.data.data}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TerminalCard
-                  terminal={item}
-                  onPress={() => setSelectedTerminal(item)}
-                  isSelected={selectedTerminal?.id === item.id}
-                />
-              )}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.terminalsList}
-            />
-          ) : (
-            <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
-              <MaterialIcons name="devices" size={48} color={colors.textSecondary} />
-              <Text style={[styles.emptyStateText, { color: colors.text }]}>No terminals found</Text>
-            </View>
-          )}
-        </View>
-
-        {selectedTerminal && (
-          <View style={styles.actionContainer}>
-            <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: common.primary }]}
-              onPress={() =>
-                navigation.navigate('CreateTransaction', {
-                  terminal: selectedTerminal,
-                })
-              }
-              activeOpacity={0.8}
-            >
-              <View style={styles.createButtonIcon}>
-                 <MaterialIcons name="add-shopping-cart" size={26} color="#fff" />
-              </View>
-              <Text style={styles.createButtonText}>Create New Payment</Text>
-              <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.6)" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Orders</Text>
-            {selectedTerminal && (
-               <Text style={[styles.terminalIndicator, { color: colors.textSecondary }]}>
-                 {selectedTerminal.terminal_name}
-               </Text>
-            )}
           </View>
 
           {transactionsQuery.isLoading && !transactionsQuery.data ? (

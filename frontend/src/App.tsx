@@ -26,8 +26,12 @@ import KybRegistrationsPage from './pages/KybRegistrationsPage';
 import KycVerificationsPage from './pages/KycVerificationsPage';
 import RolesPage from './pages/RolesPage';
 import RequireSuperAdmin from './components/RequireSuperAdmin';
+import RequireDeveloperRole from './components/RequireDeveloperRole';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
+import DeveloperExperience from './pages/DeveloperExperience';
+import ApiDocsPage from './pages/ApiDocsPage';
 import Policies from './pages/Policies';
+import Compliance from './pages/Compliance';
 import Features from './pages/Features';
 import Pricing from './pages/Pricing';
 import Login from './pages/Login';
@@ -39,10 +43,8 @@ import NotFound from './pages/NotFound';
 import MaintenancePage from './pages/MaintenancePage';
 import BotIntro from './pages/BotIntro';
 import ScanQRPH from './pages/ScanQRPH';
-import XenditPage from './pages/XenditPage';
-import AlipayPage from './pages/AlipayPage';
-import WeChatPage from './pages/WeChatPage';
 import HomePage from './pages/Index';
+import MagpieSuccess from './pages/MagpieSuccess';
 
 const queryClient = new QueryClient();
 
@@ -134,15 +136,14 @@ function AuthAwareShell() {
             <Route path="/payments" element={<CreatePayment />} />
             <Route path="/create-payment" element={<CreatePayment />} />
             <Route path="/scan-qrph" element={<ScanQRPH />} />
-            <Route path="/xendit" element={<XenditPage />} />
-            <Route path="/alipay" element={<AlipayPage />} />
-            <Route path="/wechat" element={<WeChatPage />} />
             <Route path="/disbursements" element={<DisbursementsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/bot-settings" element={<BotSettings />} />
+            <Route path="/bot-settings" element={<RequireSuperAdmin><BotSettings /></RequireSuperAdmin>} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/messenger" element={<MessengerPage />} />
-            <Route path="/admin-management" element={<RequireSuperAdmin><AdminManagement /></RequireSuperAdmin>} />
+            <Route path="/developer-experience" element={<RequireDeveloperRole><DeveloperExperience /></RequireDeveloperRole>} />
+            <Route path="/api-docs" element={<RequireDeveloperRole><ApiDocsPage /></RequireDeveloperRole>} />
+            <Route path="/admin-management" element={<ProtectedAdminRoute><AdminManagement /></ProtectedAdminRoute>} />
             <Route path="/bot-messages" element={<ProtectedAdminRoute><BotMessagesPage /></ProtectedAdminRoute>} />
             <Route path="/topup-requests" element={<RequireSuperAdmin><TopupRequestsPage /></RequireSuperAdmin>} />
             <Route path="/usdt-send-requests" element={<RequireSuperAdmin><UsdtSendRequestsPage /></RequireSuperAdmin>} />
@@ -151,6 +152,8 @@ function AuthAwareShell() {
             <Route path="/kyc-verifications" element={<RequireSuperAdmin><KycVerificationsPage /></RequireSuperAdmin>} />
             <Route path="/roles" element={<RequireSuperAdmin><RolesPage /></RequireSuperAdmin>} />
             <Route path="/policies" element={<Policies />} />
+            <Route path="/compliance" element={<Compliance />} />
+            <Route path="/magpie-success" element={<MagpieSuccess />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PageFade>

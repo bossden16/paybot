@@ -23,7 +23,7 @@ test.afterEach(() => {
   globalThis.localStorage = originalLocalStorage;
 });
 
-test('authApi.login posts credentials to the terminal-login endpoint and stores the access token', async () => {
+test('authApi.login posts credentials to the generic login endpoint and stores the access token', async () => {
   let requestUrl: string | undefined;
   let requestBody: unknown;
 
@@ -42,7 +42,7 @@ test('authApi.login posts credentials to the terminal-login endpoint and stores 
 
   await authApi.login('admin@example.com', 'secret-password');
 
-  assert.equal(requestUrl, '/api/v1/auth/terminal-login');
+  assert.equal(requestUrl, '/api/v1/auth/login');
   assert.deepEqual(requestBody, {
     email: 'admin@example.com',
     password: 'secret-password',

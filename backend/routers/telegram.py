@@ -25,13 +25,10 @@ from models.refunds import Refunds
 from models.subscriptions import Subscriptions
 from schemas.auth import UserResponse
 from services.telegram_service import TelegramService, _resolve_bot_token, t as _t, user_lang as _user_lang
-from services.maya_service import MayaService
-from services.xendit_service import XenditService
+from services.magpie_service import MagpieService
 from services.event_bus import payment_event_bus
-from services.paymongo_service import PayMongoService
 from services.photonpay_service import PhotonPayService
 from services.bot_settings import Bot_settingsService
-from services.pos_terminal import POSTerminalService
 from services.wallets import WalletsService
 from services.app_settings import get_usdt_php_rate, get_usdt_trc20_address
 from models.topup_requests import TopupRequest
@@ -214,12 +211,12 @@ async def _compute_usd_balance_for_wallet(db: AsyncSession, user_id: str) -> flo
 
 
 async def _get_php_balance_for_bot(db: AsyncSession, tg_user_id: str) -> float:
-    """Return the live PayMongo PHP balance, falling back to the stored wallet row.
+    """Return the live Magpie PHP balance, falling back to the stored wallet row.
 
     Returns 0.0 if neither source is available so the caller can decide.
     """
     try:
-        pm_svc = PayMongoService()
+        pm_svc = MagpieService()
         result = await pm_svc.get_balance()
         if result.get("success"):
             available = result.get("available", [])
@@ -227,7 +224,7 @@ async def _get_php_balance_for_bot(db: AsyncSession, tg_user_id: str) -> float:
             if php_entry is not None:
                 return float(php_entry["amount"]) / 100.0
     except Exception as e:
-        logger.warning("PayMongo balance fetch failed in PHP threshold check: %s", e)
+        logger.warning("Magpie balance fetch failed in PHP threshold check: %s", e)
 
     # Fallback: stored PHP wallet row
     try:
@@ -266,6 +263,12 @@ class BotConfigUpdate(BaseModel):
     maintenance_message: Optional[str] = None
     commands_enabled: Optional[str] = None
     whatsapp_number: Optional[str] = None
+
+
+def _require_super_admin(current_user: UserResponse):
+    perms = current_user.permissions
+    if not perms or not perms.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super admin access required for bot settings.")
 
 
 # ---------- KYB constants ----------
@@ -323,11 +326,6 @@ _CMD_STEPS: Dict[str, List[Dict]] = {
     "/refund": [
         {"key": "id",     "type": "str",   "prompt": "🆔 Enter the <b>transaction ID</b> to refund:\n<i>e.g. INV-xxx</i>"},
         {"key": "amount", "type": "float", "prompt": "💰 Enter the <b>refund amount</b> in PHP:\n<i>e.g. 500</i>"},
-    ],
-    "/pos": [
-        {"key": "amount",         "type": "float", "prompt": "💰 Enter the <b>amount</b> in PHP:\n<i>e.g. 500</i>"},
-        {"key": "description",    "type": "str",   "prompt": "📝 Enter the <b>description</b>:\n<i>e.g. Retail Sale</i>\n\nOr type <code>skip</code> to use the default.", "optional": True, "default": "POS Sale"},
-        {"key": "terminal_code",  "type": "str",   "prompt": "🔢 Enter the <b>Terminal Code</b> to push this transaction to:\n\nOr type <code>skip</code> to use your active terminal.", "optional": True, "default": "AUTO"},
     ],
     "/send": [
         {"key": "recipient", "type": "str",   "prompt": "👤 Enter the <b>recipient</b> (username or Telegram ID):\n<i>e.g. @username</i>"},
@@ -435,14 +433,11 @@ def _welcome_en(name: str = "") -> str:
     return (
         f"👋 <b>xend Philippines ✅</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"{greeting} Your all-in-one payment terminal is ready.\n\n"
+        f"{greeting} Your payment workspace is ready.\n\n"
         f"💳 <b>Accept Payments</b>\n"
         f"  /invoice — Create invoice link\n"
-        f"  /pos — Push to Terminal (Tap to Phone)\n"
         f"  /qr — Generate a QR code\n"
         f"  /link — Shareable link\n\n"
-        f"📟 <b>Terminals</b>\n"
-        f"  /terminal — Manage active POS devices\n\n"
         f"💰 <b>Wallet</b>\n"
         f"  /wallet — Check balance & history\n"
         f"  /send [to] [amt] — Transfer PHP to user\n"
@@ -456,14 +451,11 @@ def _welcome_zh(name: str = "") -> str:
     return (
         f"👋 <b>xend Philippines ✅</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"{greeting} 您的一站式支付终端已就绪。\n\n"
+        f"{greeting} 您的支付工作台已就绪。\n\n"
         f"💳 <b>收款功能</b>\n"
         f"  /invoice — 创建账单链接\n"
-        f"  /pos — 终端支付 (Tap to Phone)\n"
         f"  /qr — 生成二维码\n"
         f"  /link — 分享付款链接\n\n"
-        f"📟 <b>终端管理</b>\n"
-        f"  /terminal — 管理您的 POS 设备\n\n"
         f"💰 <b>我的钱包</b>\n"
         f"  /wallet — 查看余额与历史\n"
         f"  /send [接收方] [金额] — 转账 PHP\n"
@@ -1017,61 +1009,30 @@ async def _process_withdrawal_request(
     amount: float,
     cmd_label: str = "Withdrawal"
 ) -> None:
-    """Process a withdrawal / disbursement request with balance check and ledger entry."""
+    """Process a withdrawal / disbursement request via WalletsService policy checks."""
     if amount <= 0:
         await tg.send_message(chat_id, "❌ Amount must be positive.")
         return
 
     from services.wallets import WalletsService
     wallet_svc = WalletsService(db)
-    wallet = await wallet_svc.get_or_create_wallet(chat_id, "PHP", lock=True)
-    user_wallet_id = wallet.user_id
-
-    if wallet.balance < amount:
-        await tg.send_message(chat_id, f"❌ Insufficient balance: ₱{wallet.balance:,.2f}")
+    try:
+        result = await wallet_svc.withdraw_request(
+            user_id=chat_id,
+            amount=amount,
+            bank_name=bank.upper(),
+            account_number=account,
+            account_name=name,
+            note=f"{cmd_label} request via Telegram",
+        )
+    except ValueError as exc:
+        await tg.send_message(chat_id, f"❌ {str(exc)}")
         return
 
-    now = datetime.now(timezone.utc)
-    ext_id = f"wd-{uuid.uuid4().hex[:12]}"
-    disb = Disbursements(
-        user_id=user_wallet_id,
-        external_id=ext_id,
-        amount=amount,
-        currency="PHP",
-        bank_code=bank.upper(),
-        account_number=account,
-        account_name=name,
-        description=f"{cmd_label} request via Telegram",
-        status="pending",
-        disbursement_type="single",
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(disb)
-
-    balance_before = wallet.balance
-    wallet.balance = round(wallet.balance - amount, 2)
-    
-    # Also update available_balance for consistency
-    if hasattr(wallet, 'available_balance'):
-        wallet.available_balance = round((wallet.available_balance or 0.0) - amount, 2)
-
-    wallet.updated_at = now
-
-    wtxn = Wallet_transactions(
-        user_id=user_wallet_id,
-        wallet_id=wallet.id,
-        transaction_type="withdraw",
-        amount=-amount,
-        balance_before=balance_before,
-        balance_after=wallet.balance,
-        note=f"{cmd_label} request: {bank} {account} (#{ext_id})",
-        status="pending",
-        reference_id=ext_id,
-        created_at=now,
-    )
-    db.add(wtxn)
-    await db.commit()
+    ext_id = result.get("reference_id", "")
+    user_wallet_id = str(chat_id)
+    new_balance = float(result.get("balance", 0.0))
+    txn_id = int(result.get("transaction_id", 0))
 
     await tg.send_chat_action(chat_id, "typing")
     msg = _t(chat_id,
@@ -1082,7 +1043,7 @@ async def _process_withdrawal_request(
         f"🔢 Account: <code>{account}</code>\n"
         f"👤 Name: {name}\n"
         f"🆔 Ref: <code>{ext_id}</code>\n\n"
-        f"⏳ The bank will now validating your {cmd_label.lower()}, please wait for your balance credited to your bank patiently",
+        f"⏳ Please wait for the bank to validate the transfer process",
         f"✅ <b>{cmd_label} 申请已接收</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 金额: <b>₱{amount:,.2f}</b>\n"
@@ -1090,7 +1051,7 @@ async def _process_withdrawal_request(
         f"🔢 账号: <code>{account}</code>\n"
         f"👤 姓名: {name}\n"
         f"🆔 参考: <code>{ext_id}</code>\n\n"
-        f"⏳ 银行正在验证您的提款，请耐心等待余额存入您的银行。"
+        f"⏳ 请等待银行验证转账流程。"
     )
     await tg.send_message(chat_id, msg)
 
@@ -1112,12 +1073,12 @@ async def _process_withdrawal_request(
     payment_event_bus.publish({
         "event_type": "wallet_update",
         "user_id": user_wallet_id,
-        "wallet_id": wallet.id,
-        "balance": wallet.balance,
+        "wallet_id": None,
+        "balance": new_balance,
         "currency": "PHP",
         "transaction_type": "withdraw",
         "amount": amount,
-        "transaction_id": wtxn.id,
+        "transaction_id": txn_id,
         "note": f"{cmd_label} requested to {bank}",
         "skip_bot_notify": True
     })
@@ -1163,6 +1124,7 @@ async def get_bot_config(
     db: AsyncSession = Depends(get_db),
 ):
     """Get (or create) the bot configuration for the current user."""
+    _require_super_admin(current_user)
     service = Bot_settingsService(db)
     result = await service.get_list(skip=0, limit=1, user_id=str(current_user.id))
     if result["total"] == 0:
@@ -1195,6 +1157,7 @@ async def update_bot_config(
     db: AsyncSession = Depends(get_db),
 ):
     """Update bot configuration for the current user."""
+    _require_super_admin(current_user)
     service = Bot_settingsService(db)
     result = await service.get_list(skip=0, limit=1, user_id=str(current_user.id))
     update_dict = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -1874,72 +1837,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 return {"status": "ok"}
 
             if cmd == "/pos":
-                try:
-                    amount = float(collected.get("amount", 0))
-                    description = collected.get("description", "POS Sale")
-                    terminal_code = collected.get("terminal_code", "AUTO")
-
-                    if amount <= 0:
-                        await tg.send_message(chat_id, "❌ Amount must be greater than zero.")
-                        return {"status": "ok"}
-
-                    pos_service = POSTerminalService(db)
-
-                    # Try to find the terminal
-                    terminal = None
-                    if terminal_code != "AUTO":
-                        terminal = await pos_service.get_terminal_by_code(terminal_code)
-                    else:
-                        # Find the first active terminal for this user
-                        terminals, _ = await pos_service.list_user_terminals(f"tg-{chat_id}", page=1, per_page=1)
-                        if terminals:
-                            terminal = terminals[0]
-
-                    if not terminal:
-                        await tg.send_message(chat_id, "❌ No active terminal found to push this transaction to.")
-                        return {"status": "ok"}
-
-                    # Push to terminal (ECR Push)
-                    order_id = f"pos-{uuid.uuid4().hex[:12]}"
-                    from models.pos_terminal import POSTerminalTransaction
-                    from services.event_bus import event_bus
-
-                    txn = POSTerminalTransaction(
-                        terminal_id=terminal.id,
-                        user_id=f"tg-{chat_id}",
-                        order_id=order_id,
-                        description=description,
-                        amount=int(amount * 100),
-                        currency="PHP",
-                        payment_method="awaiting_tap",
-                        status="pending",
-                    )
-                    db.add(txn)
-                    await db.commit()
-
-                    # Emit event to wake up the physical terminal
-                    await event_bus.emit("ecr_push", {
-                        "terminal_id": terminal.id,
-                        "device_id": terminal.device_id,
-                        "order_id": order_id,
-                        "amount": amount,
-                        "description": description
-                    })
-
-                    reply = (
-                        f"📲 <b>Transaction Pushed to Terminal</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📟 Terminal: <b>{terminal.terminal_name}</b> (<code>{terminal.terminal_code}</code>)\n"
-                        f"💰 Amount: <b>₱{amount:,.2f}</b>\n"
-                        f"📝 {description}\n"
-                        f"🆔 <code>{order_id}</code>\n\n"
-                        f"Please tap the card on your terminal app to complete the payment."
-                    )
-                    await tg.send_message(chat_id, reply)
-
-                except Exception as exc:
-                    logger.error(f"/pos wizard completion error: {exc}", exc_info=True)
-                    await tg.send_message(chat_id, "❌ An error occurred pushing your transaction. Please try again.")
+                await tg.send_message(chat_id, "⚠️ POS terminal payments are no longer supported in this build.")
                 return {"status": "ok"}
 
             # Other commands: rebuild command text and fall through to routing
@@ -2114,7 +2012,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
                     description = parts[2] if len(parts) > 2 else "Invoice payment"
-                    maya = MayaService()
+                    maya = MagpieService()
                     result = await maya.create_invoice(amount=amount, description=description)
                     if result.get("success"):
                         invoice_url = result.get('invoice_url', '')
@@ -2171,15 +2069,15 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
                     description = parts[2] if len(parts) > 2 else "QR payment"
-                    xendit_svc = XenditService()
+                    maya_svc = MagpieService()
                     ext_id = f"qr-{uuid.uuid4().hex[:8]}"
-                    result = await xendit_svc.create_qr_code(amount=amount, external_id=ext_id, description=description)
+                    result = await maya_svc.create_qr_payment(amount=amount, external_id=ext_id, description=description, payment_methods=["qrph"])
                     if result.get("success"):
                         reply = (
                             f"✅ <b>QR Code Generated</b>\n"
                             f"━━━━━━━━━━━━━━━━━━━━\n"
                             f"💰 Amount: <b>₱{amount:,.2f}</b>\n"
-                            f"📱 QR String: <code>{result.get('qr_string', '')}</code>\n"
+                            f"📱 QR String: <code>{result.get('qr_content', '')}</code>\n"
                             f"🆔 Ref: <code>{result.get('external_id', '')}</code>\n"
                             f"━━━━━━━━━━━━━━━━━━━━\n"
                             f"💡 <i>Tip: Tap the QR string to copy it.</i>"
@@ -2189,9 +2087,9 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                             now = datetime.now(timezone.utc)
                             txn = Transactions(
                                 user_id=f"tg-{chat_id}", transaction_type="qr_code",
-                                external_id=result.get("external_id", ""), xendit_id=result.get("qr_id", ""),
+                                external_id=result.get("external_id", ""), xendit_id=result.get("qr_id", "") or result.get("checkout_id", ""),
                                 amount=amount, currency="PHP", status="pending", description=description,
-                                qr_code_url=result.get("qr_string", ""), telegram_chat_id=chat_id,
+                                qr_code_url=result.get("qr_content", "") or result.get("redirect_url", ""), telegram_chat_id=chat_id,
                                 created_at=now, updated_at=now,
                             )
                             db.add(txn)
@@ -2278,21 +2176,20 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                             logger.warning(f"PhotonPay Alipay failed: {result.get('error', 'Unknown error')} — trying Xendit fallback")
                             use_xendit_fallback = True
                     else:
-                        # Fallback: use Maya
-                        maya = MayaService()
-                        if not maya.secret_key:
+                        # Fallback: use Magpie
+                        maya = MagpieService()
+                        if not maya.api_key:
                             await tg.send_message(
                                 chat_id,
                                 "❌ <b>Alipay payments are not available at this time.</b>\n\n"
-                                "Neither PhotonPay nor Maya is configured.",
+                                "Neither PhotonPay nor Magpie is configured.",
                             )
                             await _safe_log(db, chat_id, username, text)
                             return {"status": "ok"}
                         
-                        xendit_svc = XenditService()
-                        result = await xendit_svc.create_qr_code(amount=amount, description=description)
+                        result = await maya.create_qr_payment(amount=amount, description=description, payment_methods=["alipay", "qrph"])
                         if result.get("success"):
-                            qr_url = result.get("qr_image_url", "")
+                            qr_url = result.get("qr_content", "") or result.get("redirect_url", "")
                             ref_num = result.get("external_id", "")
                             caption = (
                                 f"✅ <b>Alipay Payment Ready!</b>\n"
@@ -2308,7 +2205,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                                 now = datetime.now(timezone.utc)
                                 txn = Transactions(
                                     user_id=f"tg-{chat_id}", transaction_type="alipay_qr",
-                                    external_id=ref_num, xendit_id=result.get("id", ""),
+                                    external_id=ref_num, xendit_id=result.get("qr_id", "") or result.get("checkout_id", ""),
                                     amount=amount, currency="PHP", status="pending", description=description,
                                     qr_code_url=qr_url, telegram_chat_id=chat_id,
                                     created_at=now, updated_at=now,
@@ -2418,7 +2315,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
                     description = parts[2] if len(parts) > 2 else "Payment link"
-                    xendit = MayaService()
+                    xendit = MagpieService()
                     result = await xendit.create_payment_link(amount=amount, description=description)
                     if result.get("success"):
                         link_url = result.get('payment_link_url', '')
@@ -2469,35 +2366,11 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         await tg.send_message(chat_id, "❌ Amount must be greater than zero.")
                         await _safe_log(db, chat_id, username, text)
                         return {"status": "ok"}
-                    bank_code = parts[2].upper()
-                    xendit_svc = XenditService()
-                    result = await xendit_svc.create_virtual_account(amount=amount, bank_code=bank_code, account_name=username)
-                    if result.get("success"):
-                        reply = (
-                            f"✅ <b>Virtual Account Created!</b>\n\n🏦 Bank: {bank_code}\n💰 ₱{amount:,.2f}\n"
-                            f"🔢 Account: <code>{result.get('account_number', '')}</code>\n"
-                            f"🆔 <code>{result.get('external_id', '')}</code>"
-                        )
-                        await tg.send_message(chat_id, reply)
-                        try:
-                            now = datetime.now(timezone.utc)
-                            txn = Transactions(
-                                user_id=f"tg-{chat_id}", transaction_type="virtual_account",
-                                external_id=result.get("external_id", ""), xendit_id=result.get("va_id", ""),
-                                amount=amount, currency="PHP", status="pending",
-                                description=f"VA: {bank_code}", telegram_chat_id=chat_id,
-                                created_at=now, updated_at=now,
-                            )
-                            db.add(txn)
-                            await db.commit()
-                        except Exception as e:
-                            logger.error(f"DB save failed for /va: {e}", exc_info=True)
-                            try:
-                                await db.rollback()
-                            except Exception:
-                                pass
-                    else:
-                        await tg.send_message(chat_id, f"❌ Failed: {result.get('error', 'Unknown error')}")
+                    await tg.send_message(
+                        chat_id,
+                        "❌ <b>/va is no longer supported.</b>\n\n"
+                        "xend mode is enabled and virtual accounts are disabled."
+                    )
                 except ValueError:
                     await tg.send_message(chat_id, "❌ Invalid amount.")
 
@@ -2520,7 +2393,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                         "MAYA": "PH_MAYA", "PAYMAYA": "PH_MAYA", "PH_MAYA": "PH_MAYA",
                     }
                     channel = channel_map.get(provider, f"PH_{provider}")
-                    maya = MayaService()
+                    maya = MagpieService()
                     result = await maya.create_ewallet_charge(amount=amount, channel_code=channel)
                     if result.get("success"):
                         checkout = result.get("checkout_url", "")
@@ -2622,7 +2495,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                     elif refund_amount > txn.amount:
                         await tg.send_message(chat_id, "❌ Refund amount exceeds transaction amount.")
                     else:
-                        xendit = MayaService()
+                        xendit = MagpieService()
                         ref_result = await xendit.create_refund(invoice_id=txn.xendit_id, amount=refund_amount)
                         ref_type = "full" if refund_amount >= txn.amount else "partial"
                         if ref_result.get("success"):
@@ -2713,13 +2586,12 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
         elif text.startswith("/balance") or text.startswith("/wallet"):
             try:
                 wallet_service = WalletsService(db)
-                # Use service for consistent ID normalization
+                php_res = await wallet_service.get_balance(str(chat_id), "PHP")
+                usd_res = await wallet_service.get_balance(str(chat_id), "USD")
                 wallet = await wallet_service.get_or_create_wallet(chat_id, "PHP")
 
-                php_balance = wallet.balance
-                
-                # USD wallet — compute balance from transaction history
-                usd_balance = await _compute_usd_balance_for_wallet(db, tg_user_id)
+                php_balance = float(php_res.get("balance", 0.0))
+                usd_balance = float(usd_res.get("balance", 0.0))
 
                 # Fetch last 3 PHP wallet transactions
                 wt_res = await db.execute(
@@ -3395,7 +3267,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 try:
                     amount = float(parts[1])
                     method = parts[2].lower()
-                    xendit = MayaService()
+                    xendit = MagpieService()
                     fees = xendit.calculate_fees(amount, method)
                     reply = (
                         f"💱 <b>Fee Calculation</b>\n\n💰 Amount: ₱{amount:,.2f}\n📋 Method: {method}\n"
@@ -3556,8 +3428,7 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 "🔗 /link [amt] [desc] — Payment Link\n"
                 "🏦 /va [amt] [bank] — Virtual Account\n"
                 "📲 /ewallet [amt] [provider] — E-Wallet\n"
-                "💳 /pos [amt] [desc] — Terminal POS payment\n"
-                "🔴 /alipay [amt] [desc] — Alipay QR (PhotonPay)\n"
+                " /alipay [amt] [desc] — Alipay QR (PhotonPay)\n"
                 "🟢 /wechat [amt] [desc] — WeChat QR (PhotonPay)\n"
                 "📷 /scanqr — Scan &amp; pay via QRPH\n\n"
                 "💡 Example: /invoice 500 Coffee order"
@@ -3566,115 +3437,17 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
 
         # ==================== /pos ====================
         elif text.startswith("/pos"):
-            parts = text.split(maxsplit=3)
-            if len(parts) < 2:
-                await tg.send_message(chat_id, _wizard_start(chat_id, "/pos"))
-            else:
-                try:
-                    amount = float(parts[1])
-                    description = parts[2] if len(parts) > 2 else "POS Sale"
-                    terminal_code = parts[3] if len(parts) > 3 else "AUTO"
-
-                    pos_service = POSTerminalService(db)
-                    terminal = None
-                    if terminal_code != "AUTO":
-                        terminal = await pos_service.get_terminal_by_code(terminal_code)
-                    else:
-                        terminals, _ = await pos_service.list_user_terminals(f"tg-{chat_id}", page=1, per_page=1)
-                        if terminals:
-                            terminal = terminals[0]
-
-                    if not terminal:
-                        await tg.send_message(chat_id, "❌ No active terminal found to push this transaction to.")
-                        return {"status": "ok"}
-
-                    # Push logic (same as wizard completion)
-                    order_id = f"pos-{uuid.uuid4().hex[:12]}"
-                    from models.pos_terminal import POSTerminalTransaction
-                    from services.event_bus import event_bus
-
-                    txn = POSTerminalTransaction(
-                        terminal_id=terminal.id, user_id=f"tg-{chat_id}",
-                        order_id=order_id, description=description,
-                        amount=int(amount * 100), currency="PHP",
-                        payment_method="awaiting_tap", status="pending",
-                    )
-                    db.add(txn)
-                    await db.commit()
-
-                    await event_bus.emit("ecr_push", {
-                        "terminal_id": terminal.id, "device_id": terminal.device_id,
-                        "order_id": order_id, "amount": amount, "description": description
-                    })
-
-                    reply = (
-                        f"📲 <b>Transaction Pushed to Terminal</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📟 Terminal: <b>{terminal.terminal_name}</b> (<code>{terminal.terminal_code}</code>)\n"
-                        f"💰 Amount: <b>₱{amount:,.2f}</b>\n"
-                        f"📝 {description}\n"
-                        f"🆔 <code>{order_id}</code>\n\n"
-                        f"Please tap the card on your terminal app to complete the payment."
-                    )
-                    await tg.send_message(chat_id, reply)
-                except ValueError:
-                    await tg.send_message(chat_id, "❌ Invalid amount.")
-                except Exception as e:
-                    logger.error(f"/pos command error: {e}", exc_info=True)
-                    await tg.send_message(chat_id, "❌ Error processing command.")
+            await tg.send_message(chat_id, "⚠️ POS terminal payments are no longer supported in this build.")
             return {"status": "ok"}
 
         # ==================== /terminal ====================
         elif text.startswith("/terminal"):
-            try:
-                pos_service = POSTerminalService(db)
-                terminals, _ = await pos_service.list_user_terminals(f"tg-{chat_id}")
-                if not terminals:
-                    await tg.send_message(chat_id, "📟 <b>No Terminals Found</b>\n\nYou don't have any POS terminals assigned yet. Contact your administrator to request one.")
-                else:
-                    lines = ["📟 <b>Your POS Terminals</b>\n━━━━━━━━━━━━━━━━━━━━"]
-                    for t in terminals:
-                        status_emoji = "✅" if t.is_active else "❌"
-                        t0_badge = " [ULTRA T+0]" if t.is_t0_settlement else ""
-                        lines.append(f"{status_emoji} <b>{t.terminal_name}</b>{t0_badge}\n   Code: <code>{t.terminal_code}</code>\n   Status: {t.status.upper()}")
-                    lines.append("\n💡 Use <code>/pos [amount]</code> to push a transaction to your terminal.\nUse /settlements to view pending payouts.")
-                    await tg.send_message(chat_id, "\n".join(lines))
-            except Exception as e:
-                logger.error(f"/terminal error: {e}", exc_info=True)
-                await tg.send_message(chat_id, "❌ Error fetching terminals.")
+            await tg.send_message(chat_id, "⚠️ POS terminal management is no longer available in this build.")
             return {"status": "ok"}
 
         # ==================== /settlements ====================
         elif text.startswith("/settlements"):
-            try:
-                from models.pos_terminal import POSTerminalTransaction
-                res = await db.execute(
-                    select(
-                        func.coalesce(func.sum(POSTerminalTransaction.amount), 0),
-                        func.count(POSTerminalTransaction.id)
-                    ).where(
-                        POSTerminalTransaction.user_id == f"tg-{chat_id}",
-                        POSTerminalTransaction.status == "completed"
-                    )
-                )
-                row = res.one()
-                total_cents = int(row[0] or 0)
-                count = int(row[1] or 0)
-                total_php = total_cents / 100.0
-
-                reply = (
-                    f"🏦 <b>Settlement Overview</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"💰 Total Processed: <b>₱{total_php:,.2f}</b>\n"
-                    f"🔢 Total Orders: <b>{count}</b>\n"
-                    f"⏳ Pending Clearing: <b>₱0.00</b>\n\n"
-                    f"✅ All funds have been cleared and credited to your PHP wallet.\n"
-                    f"💡 <i>Next clearing window: Today at 00:00 UTC</i>"
-                )
-                await tg.send_message(chat_id, reply)
-            except Exception as e:
-                logger.error(f"/settlements error: {e}", exc_info=True)
-                await tg.send_message(chat_id, "❌ Error fetching settlement data.")
+            await tg.send_message(chat_id, "⚠️ Settlement history is not available in this build.")
             return {"status": "ok"}
 
 
@@ -3687,10 +3460,8 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 "  /pay — Open payment menu\n"
                 "  /invoice — Create an invoice\n"
                 "  /qr — Generate a QR code\n"
-                "  /pos — Push to Terminal (Tap to Phone)\n"
                 "  /link — Shareable payment link\n\n"
-                "📟 <b>Terminal Management</b>\n"
-                "  /terminal — List your active terminals\n"
+                "📟 <b>Payments</b>\n"
                 "  /status [id] — Check payment status\n\n"
                 "💰 <b>Wallet & Transfers</b>\n"
                 "  /wallet — Wallet summary & balance\n"
@@ -3709,10 +3480,8 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 "  /pay — 打开收款菜单\n"
                 "  /invoice — 创建账单\n"
                 "  /qr — 生成二维码\n"
-                "  /pos — 终端支付 (Tap to Phone)\n"
                 "  /link — 可分享付款链接\n\n"
-                "📟 <b>终端管理</b>\n"
-                "  /terminal — 查看您的活跃终端\n"
+                "📟 <b>支付</b>\n"
                 "  /status [id] — 查询付款状态\n\n"
                 "💰 <b>钱包与转账</b>\n"
                 "  /wallet — 钱包摘要与余额\n"

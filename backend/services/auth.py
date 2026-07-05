@@ -51,6 +51,8 @@ class AuthService:
         self,
         user: User,
         permissions: Optional[UserPermissions] = None,
+        organization_id: Optional[str] = None,
+        organization_name: Optional[str] = None,
     ) -> Tuple[str, datetime, Dict[str, Any]]:
         """Generate application JWT token for the authenticated user."""
         try:
@@ -70,6 +72,10 @@ class AuthService:
             claims["name"] = user.name
         if user.last_login:
             claims["last_login"] = user.last_login.isoformat()
+        if organization_id:
+            claims["organization_id"] = organization_id
+        if organization_name:
+            claims["organization_name"] = organization_name
         if permissions:
             claims["permissions"] = permissions.model_dump()
         token = create_access_token(claims, expires_minutes=expires_minutes)
@@ -221,22 +227,6 @@ async def initialize_admin_user():
             admin_entry.telegram_username = "alipayboss"
             await db.commit()
 
-        # --- AUTO-CREATE TEST TERMINAL FOR ADMIN ---
-        from models.pos_terminal import POSTerminal, TerminalStatus
-        res_term = await db.execute(select(POSTerminal).where(POSTerminal.user_id == admin_user_id).limit(1))
-        if not res_term.scalars().first():
-            test_terminal = POSTerminal(
-                terminal_code="TERM-ADMIN-TEST",
-                terminal_name="Admin Test Terminal",
-                user_id=admin_user_id,
-                status=TerminalStatus.ACTIVE,
-                is_active=True,
-                enabled_payment_methods=["maya", "card", "gcash", "grabpay"],
-                assigned_at=datetime.utcnow()
-            )
-            db.add(test_terminal)
-            await db.commit()
-            logger.info(f"Created initial test terminal for {admin_user_id}")
 
 
 # Demo user definitions (fixed IDs, used for dev/demo login)

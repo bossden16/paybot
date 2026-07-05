@@ -8,7 +8,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { enableScreens } from 'react-native-screens';
-import { terminalApi } from './api/terminal';
 
 enableScreens();
 
@@ -141,7 +140,6 @@ export default function App() {
     },
     signOut: async () => {
       await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('terminal_id');
       await AsyncStorage.removeItem('has_pin');
       setIsLoggedIn(false);
       setIsLocked(false);
@@ -165,15 +163,9 @@ export default function App() {
         const token = await AsyncStorage.getItem('auth_token');
         setIsLoggedIn(!!token);
 
-        // Register device on startup
-        const registration = await terminalApi.registerDevice();
-        console.log('Device Registration:', registration);
-
-        if (registration.success && registration.data) {
-          setIsDeviceLinked(registration.data.is_linked);
-          setTerminalId(registration.data.terminal_id);
-          // Initial lock removed as per user request
-        }
+        // Terminal device registration removed; the app now uses the generic auth flow.
+        setIsDeviceLinked(true);
+        setTerminalId(null);
       } catch (e) {
         console.log('Failed during startup:', e);
       } finally {

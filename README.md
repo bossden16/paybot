@@ -25,7 +25,7 @@
 
 **xend Philippines** is a premier, bank-grade financial settlement platform designed for licensed merchants and high-volume commercial operations. It transforms standard communication channels into high-performance financial nodes, enabling secure card acceptance, multi-currency liquidity management, and real-time clearing with enterprise-level oversight.
 
-Our infrastructure is strictly regulated and compliant with local financial standards, integrated directly with **Maya Business**, **Security Bank**, **PayMongo**, and **PhotonPay** for robust, multi-channel clearing.
+Our infrastructure is strictly regulated and compliant with local financial standards, integrated directly with **Maya Business**, **Security Bank**, **Magpie**, and **PhotonPay** for robust, multi-channel clearing.
 
 ---
 
@@ -36,7 +36,7 @@ xend operates on a "Trusted Node" architecture, ensuring data integrity and high
 - **Core Ledger**: Python FastAPI engine with synchronous ledger balancing and atomic transaction processing.
 - **Merchant Interface**: React 18 high-fidelity dashboard with real-time grid monitoring.
 - **Mobile Terminals**: Industrial-grade React Native Android implementation for physical point-of-sale.
-- **Grid Infrastructure**: Distributed mainnet cluster on **Railway** with edge-node encryption.
+- **Grid Infrastructure**: Distributed mainnet cluster on **Render** with edge-node encryption.
 
 ---
 
@@ -49,22 +49,80 @@ xend operates on a "Trusted Node" architecture, ensuring data integrity and high
 - **Unified QRPH**: Dynamic generation of BSP-compliant QRPH codes for universal interoperability.
 
 ### 💳 Institutional Payment Gateways
+
 - **Maya Business Mainnet**: Direct settlement and native e-wallet integration.
 - **Security Bank Collect**: Enterprise-grade Apple Pay and Google Pay processing.
 - **Global Clearing**: Specialized PhotonPay channels for high-volume Alipay and WeChat Pay international trade.
 
-<<<<<<< HEAD
-### 💎 Liquidity & Vault Management
+### 💎 Digital Wallet & Liquidity Ecosystem
+
 - **Multi-Currency Nodes**: Seamlessly manage PHP, USD, and USDT (TRC-20) liquidity.
 - **Regulated Clearing**: Automated T+1 local bank clearing and real-time inter-vault transfers.
-- **Audit-Ready Ledger**: Full immutable transaction history for compliance and regulatory reporting.
-=======
-### 🏦 Digital Wallet Ecosystem
 - **Instant KYB/KYC**: Guided registration flow via Telegram.
-- **Multi-Currency**: Manage PHP, USD, and USDT (TRC20) in a single interface.
 - **Peer-to-Peer**: Zero-fee instant transfers between platform users.
 - **Auto-Sync**: Real-time balance updates across bot, mobile, and dashboard.
->>>>>>> parent of c6d943c (feat: delete KYC and KYB features from dashboard and telegram bot)
+- **Audit-Ready Ledger**: Full immutable transaction history for compliance and regulatory reporting.
+
+---
+
+## 🧑‍💻 Developer Quickstart
+These steps help contributors get the project running locally and understand the main development workflows.
+
+### Prerequisites
+- Python 3.11
+- Node.js LTS
+- `pnpm` via Corepack (installed automatically by `start_app_v2.sh`)
+- `git`
+
+### Local setup
+1. Copy environment examples:
+   - `cp backend/.env.example backend/.env`
+   - `cp frontend/.env.example frontend/.env`
+2. Install backend dependencies:
+   - `cd backend && python -m pip install --upgrade pip && python -m pip install -r requirements.txt`
+3. Install frontend dependencies:
+   - `cd frontend && pnpm install`
+
+### Start development servers
+Use the repo's starter script to run backend and frontend together:
+
+```bash
+bash start_app_v2.sh
+```
+
+For Windows, run:
+
+```powershell
+.\"setup_windows.ps1\"; .\start_local_windows.ps1
+```
+
+### Run tests
+- Backend tests:
+  - `cd backend && python -m pytest tests/ -v --tb=short`
+- Frontend lint:
+  - `cd frontend && pnpm lint`
+
+### Build production assets
+- `cd frontend && pnpm build`
+- If the backend serves static files from `backend/static/`, copy the generated assets as needed.
+
+### Magpie Checkout cURL example
+Create a Magpie Checkout Session via the backend compatibility route and set the success URL to the frontend page:
+
+```bash
+curl -X POST https://your-backend.example.com/api/v1/magpie/checkout/sessions \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sk_live_your_magpie_secret_key" \
+  -d '{
+    "payment_method_types": ["card", "gcash"],
+    "line_items": [{"name":"Test","amount":5000,"quantity":1}],
+    "currency":"php",
+    "success_url":"https://your-app.example.com/magpie-success?session_id={CHECKOUT_SESSION_ID}&payment_url={CHECKOUT_PAYMENT_URL}&amount={AMOUNT}",
+    "cancel_url":"https://your-app.example.com/cancel"
+  }'
+```
+
+After payment, Magpie will redirect customers to the frontend route `/magpie-success` (or the backend static redirect which forwards there), preserving the session and payment_url query parameters.
 
 ---
 
@@ -81,8 +139,8 @@ xend operates on a "Trusted Node" architecture, ensuring data integrity and high
 
 | Node | environment | status | uptime |
 |---------|-------------|----------|--------|
-| **Primary Dashboard** | Mainnet | [Online 🟢](https://mayaproduction.up.railway.app) | 99.98% |
-| **API Gateway** | Production | `https://mayaproduction.up.railway.app/api/v1` | 99.99% |
+| **Primary Dashboard** | Mainnet | [Online 🟢](https://your-production-backend.onrender.com) | 99.98% |
+| **API Gateway** | Production | `https://your-production-backend.onrender.com/api/v1` | 99.99% |
 | **Telegram Node** | Live | [@QRPHBOT](https://t.me/QRPHBOT) | 100% |
 | **Mobile Cluster** | Verified | Build `PB-2024-05` | Active |
 

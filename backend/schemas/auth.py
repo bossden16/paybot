@@ -6,13 +6,15 @@ from pydantic import ConfigDict, BaseModel
 
 class UserPermissions(BaseModel):
     is_super_admin: bool = False
-    can_manage_payments: bool = True
-    can_manage_disbursements: bool = True
-    can_view_reports: bool = True
-    can_manage_wallet: bool = True
-    can_manage_transactions: bool = True
+    # Least privilege by default. Explicit grants are set at login/token issuance.
+    can_manage_payments: bool = False
+    can_manage_disbursements: bool = False
+    can_view_reports: bool = False
+    can_manage_wallet: bool = False
+    can_manage_transactions: bool = False
     can_manage_bot: bool = False
     can_approve_topups: bool = False
+    can_manage_team: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -23,6 +25,8 @@ class UserResponse(BaseModel):
     name: Optional[str] = None
     role: str = "user"  # user/admin
     last_login: Optional[datetime] = None
+    organization_id: Optional[str] = None
+    organization_name: Optional[str] = None
     permissions: Optional[UserPermissions] = None
 
     model_config = ConfigDict(from_attributes=True)

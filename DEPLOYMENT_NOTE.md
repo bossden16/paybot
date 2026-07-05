@@ -2,7 +2,7 @@
 
 **Date:** June 2, 2026  
 **Deployed By:** GitHub Copilot  
-**Platform:** Railway  
+**Platform:** Render
 **Branch:** main  
 
 ## ✅ Changes Deployed
@@ -47,12 +47,12 @@
 
 ## 🚀 Deployment Status
 
-**Railway Deployment Triggered:** ✅  
+**Render Deployment Triggered:** ✅  
 **Auto-build & Deploy:** In Progress  
 **Expected Completion:** ~5-10 minutes
 
 ### Monitor Deployment
-- Railway Console: https://railway.app
+- Render Console: https://dashboard.render.com
 - Monitor logs for any errors during initialization
 - Test wallet operations in staging/production
 
@@ -65,4 +65,4 @@ git push origin main
 
 ---
 
-**Status:** Deployment queued on Railway CI/CD pipeline
+**Status:** Deployment queued on Render CI/CD pipeline

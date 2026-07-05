@@ -48,7 +48,7 @@ After modifying frontend source, rebuild and copy to `backend/static/` so the Fa
 cd frontend && pnpm build
 cp -r dist/* ../backend/static/
 ```
-The root `Dockerfile` uses `COPY . .` without a frontend build step, so committed `backend/static/` files are what gets served when using that image. Railway and Render use `backend/Dockerfile`, which includes a multi-stage frontend build and generates fresh assets automatically — no manual static copy needed for those platforms.
+The root `Dockerfile` uses `COPY . .` without a frontend build step, so committed `backend/static/` files are what gets served when using that image. Render uses `backend/Dockerfile`, which includes a multi-stage frontend build and generates fresh assets automatically — no manual static copy needed for that platform.
 
 ## Key Architectural Decisions
 
