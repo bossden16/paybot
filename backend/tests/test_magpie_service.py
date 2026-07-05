@@ -48,3 +48,36 @@ async def test_post_retries(monkeypatch):
     result = await svc._post("/v1/test", {"foo": "bar"})
     assert result.get("success") is True
     assert result.get("data", {}).get("id") == "ok"
+
+
+@pytest.mark.asyncio
+async def test_create_checkout_falls_back_to_session_when_checkout_endpoint_fails(monkeypatch):
+    svc = MagpieService()
+    svc.api_key = "testkey"
+
+    async def fake_post(path, payload, idempotency_key=None, extra_headers=None):
+        if path == "/v1/payments/checkout":
+            return {"success": False, "error": "checkout failed"}
+        if path == "/v1/checkout/sessions":
+            return {
+                "success": True,
+                "data": {
+                    "id": "session-123",
+                    "payment_url": "https://magpie.example/session/123",
+                    "external_id": payload.get("external_id"),
+                },
+            }
+        return {"success": False, "error": "unexpected path"}
+
+    monkeypatch.setattr(svc, "_post", fake_post)
+
+    result = await svc.create_checkout(
+        amount=100.0,
+        description="wallet top up",
+        external_id="ext-1",
+    )
+
+    assert result.get("success") is True
+    assert result.get("checkout_id") == "session-123"
+    assert result.get("checkout_url") == "https://magpie.example/session/123"
+    assert result.get("external_id") == "ext-1"

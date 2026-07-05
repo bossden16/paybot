@@ -168,7 +168,25 @@ class MagpieService:
         idempotency_key = external_id or f"magpie-checkout-{uuid.uuid4().hex[:12]}"
         result = await self._post("/v1/payments/checkout", payload, idempotency_key=idempotency_key)
         if not result.get("success"):
-            return result
+            # Some Magpie accounts or environments reject the legacy checkout
+            # endpoint with a 500 while the newer checkout-session endpoint works.
+            session_payload = {
+                **payload,
+                "amount": float(payload.get("amount", 0) or 0),
+                "currency": payload.get("currency", "php"),
+                "external_id": external_id,
+            }
+            session_result = await self._post("/v1/checkout/sessions", session_payload, idempotency_key=idempotency_key)
+            if not session_result.get("success"):
+                return result
+            data = session_result.get("data", {})
+            return {
+                "success": True,
+                "checkout_id": str(self._pick(data, "id", "session_id", "checkout_id") or ""),
+                "checkout_url": str(self._pick(data, "payment_url", "checkout_url", "url") or ""),
+                "external_id": str(self._pick(data, "external_id", "reference", "reference_id") or external_id),
+                "raw": data,
+            }
         return self._normalize_checkout_response(result.get("data", {}), external_id)
 
     async def create_invoice(
