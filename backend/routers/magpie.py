@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/v1/magpie", tags=["magpie-legacy"])
 
 class CheckoutSessionRequest(BaseModel):
     payment_method_types: List[str] = Field(default_factory=list)
+    payment_methods: List[str] = Field(default_factory=list)
     line_items: Optional[List[Dict[str, Any]]] = None
     mode: str = "payment"
     success_url: str = ""
@@ -98,28 +99,35 @@ async def create_checkout_session(
     amount = data.amount
     if amount is None and data.line_items:
         try:
-            total = 0.0
+            total_cents = 0
             for item in data.line_items:
-                qty = float(item.get("quantity", 1))
-                item_amount = float(item.get("amount", 0))
-                total += item_amount * qty
-            # If totals look like cents, convert to main currency units
-            if total > 1000:
-                total = total / 100.0
-            amount = float(total)
+                qty = int(item.get("quantity", 1))
+                # amount in line_items is usually in cents for Magpie
+                item_amount = int(item.get("amount", 0))
+                total_cents += item_amount * qty
+
+            # Convert cents to main currency units (PHP) for our internal ledger
+            amount = float(total_cents) / 100.0
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid line_items format")
 
     if not amount or amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be provided and > 0")
 
+    # Combine payment methods from both possible fields
+    payment_methods = list(set(data.payment_methods + data.payment_method_types))
+
     payload: Dict[str, Any] = {
         "amount": amount,
-        "currency": data.currency,
+        "currency": (data.currency or "php").lower(),
         "external_id": data.external_id or f"magpie-session-{uuid.uuid4().hex[:12]}",
     }
-    if data.payment_method_types:
-        payload["payment_method_types"] = data.payment_method_types
+
+    # Magpie specific mapping: ensure both fields are present if provided
+    if payment_methods:
+        payload["payment_methods"] = payment_methods
+        payload["payment_method_types"] = payment_methods
+
     if data.line_items:
         payload["line_items"] = data.line_items
     if data.mode:
@@ -144,15 +152,14 @@ async def create_checkout_session(
 
     if not res.get("success"):
         logger.warning("Magpie checkout session failed, falling back to create_checkout: %s", res.get("error"))
-        # Magpie's checkout-session endpoint can return a generic 500 even when the
-        # underlying checkout flow is available. Fall back to the checkout endpoint.
+        # Fall back to the legacy checkout endpoint if sessions API is unavailable
         fallback = await svc.create_checkout(
             amount=amount,
             description=data.description or "Checkout session",
             external_id=payload.get("external_id", f"magpie-session-{uuid.uuid4().hex[:12]}"),
             customer_name="",
             customer_email=data.customer_email or "",
-            payment_methods=data.payment_method_types or None,
+            payment_methods=payment_methods or None,
             metadata={
                 **(data.metadata or {}),
                 "descriptor": data.description or "",
@@ -162,6 +169,8 @@ async def create_checkout_session(
         )
         if not fallback.get("success"):
             raise HTTPException(status_code=400, detail=fallback.get("error", "Failed to create session"))
+
+        # Normalize fallback response to look like a session
         res = {
             "success": True,
             "session_id": fallback.get("checkout_id", ""),
@@ -172,8 +181,9 @@ async def create_checkout_session(
             "raw": fallback,
         }
 
-    # Record transaction
+    # Record transaction in local database
     txn_svc = TransactionsService(db)
+    txn_id = None
     try:
         txn = await txn_svc.create_transaction(
             user_id=str(current_user.id),
@@ -181,16 +191,34 @@ async def create_checkout_session(
             amount=amount,
             external_id=res.get("external_id", payload.get("external_id")),
             gateway_id=res.get("session_id", ""),
-            description=data.description,
+            description=data.description or "Magpie checkout session",
             customer_name="",
             customer_email=data.customer_email or "",
             payment_url=res.get("payment_url", ""),
         )
-    except Exception:
+        txn_id = txn.id
+    except Exception as exc:
+        logger.error("Failed to record transaction for Magpie session: %s", exc, exc_info=True)
         # Non-fatal: return success but note transaction not recorded
-        return {"success": True, "data": res.get("raw", {}), "warning": "session created but transaction record failed"}
+        return {
+            "success": True,
+            "data": res.get("raw", {}),
+            "warning": "session created but transaction record failed",
+            "payment_url": res.get("payment_url", ""),
+            "session_id": res.get("session_id", "")
+        }
 
-    return {"success": True, "data": {"transaction_id": txn.id, **res}}
+    return {
+        "success": True,
+        "data": {
+            "transaction_id": txn_id,
+            "session_id": res.get("session_id", ""),
+            "payment_url": res.get("payment_url", ""),
+            "external_id": res.get("external_id", ""),
+            "raw": res.get("raw", {})
+        }
+    }
+
 
 
 @router.get("/health")

@@ -126,10 +126,10 @@ export function usePaymentEvents({
   // that changing them does NOT recreate this function and reset the interval.
   const pollEvents = useCallback(async () => {
     try {
+      const url = `/api/v1/events/recent?since=${encodeURIComponent(lastTimestampRef.current)}`;
       const res = await client.apiCall.invoke({
-        url: '/api/v1/events/recent',
+        url,
         method: 'GET',
-        data: { since: lastTimestampRef.current },
       });
 
       // Reset fail count on success
