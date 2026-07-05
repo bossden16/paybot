@@ -81,3 +81,38 @@ async def test_create_checkout_falls_back_to_session_when_checkout_endpoint_fail
     assert result.get("checkout_id") == "session-123"
     assert result.get("checkout_url") == "https://magpie.example/session/123"
     assert result.get("external_id") == "ext-1"
+
+
+@pytest.mark.asyncio
+async def test_create_checkout_sends_payment_methods_top_level(monkeypatch):
+    svc = MagpieService()
+    svc.api_key = "testkey"
+    captured = {}
+
+    async def fake_post(path, payload, idempotency_key=None, extra_headers=None):
+        captured["path"] = path
+        captured["payload"] = payload
+        return {
+            "success": True,
+            "data": {
+                "checkout_id": "co_123",
+                "checkout_url": "https://magpie.example/checkout/co_123",
+                "external_id": payload.get("external_id"),
+            },
+        }
+
+    monkeypatch.setattr(svc, "_post", fake_post)
+
+    result = await svc.create_checkout(
+        amount=100.0,
+        description="test",
+        external_id="ext-1",
+        payment_methods=["gcash", "card"],
+        metadata={"source": "magpie"},
+    )
+
+    assert result.get("success") is True
+    assert captured["path"] == "/v1/payments/checkout"
+    assert captured["payload"]["payment_methods"] == ["gcash", "card"]
+    assert captured["payload"]["metadata"] == {"source": "magpie"}
+    assert result.get("checkout_id") == "co_123"

@@ -145,6 +145,7 @@ class MagpieService:
         customer_name: str = "",
         customer_email: str = "",
         external_id: str,
+        payment_methods: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -161,6 +162,8 @@ class MagpieService:
             payload["customer_name"] = customer_name
         if customer_email:
             payload["customer_email"] = customer_email
+        if payment_methods:
+            payload["payment_methods"] = payment_methods
         cleaned_metadata = {k: v for k, v in (metadata or {}).items() if v not in (None, "", [], {})}
         if cleaned_metadata:
             payload["metadata"] = cleaned_metadata

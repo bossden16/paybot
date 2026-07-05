@@ -195,6 +195,7 @@ async def _create_checkout_transaction(
                 customer_name=request.customer_name,
                 customer_email=request.customer_email,
                 external_id=external_id,
+                payment_methods=payment_methods,
                 metadata=metadata,
             )
     except Exception as exc:

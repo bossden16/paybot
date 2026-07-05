@@ -510,6 +510,7 @@ curl -X POST "http://localhost:8000/api/v1/magpie/checkout/sessions" \
   -d '{
     "amount": 2500,
     "payment_method_types": ["card", "gcash", "maya"],
+    "payment_methods": ["card", "gcash", "maya"],
     "line_items": [{"name": "Consulting", "amount": 250000, "quantity": 1}],
     "mode": "payment",
     "success_url": "https://your-app.example.com/magpie-success",
@@ -519,6 +520,8 @@ curl -X POST "http://localhost:8000/api/v1/magpie/checkout/sessions" \
     "description": "Consulting fee"
   }'
 ```
+
+> Note: `payment_methods` needs to be included explicitly so Magpie can resolve the checkout channel mapping. This improves compatibility for checkout/session creation and prevents Magpie from rejecting or misrouting the request.
 
 ## 15) Web Frontend Integration Example
 

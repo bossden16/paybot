@@ -152,6 +152,7 @@ async def create_checkout_session(
             external_id=payload.get("external_id", f"magpie-session-{uuid.uuid4().hex[:12]}"),
             customer_name="",
             customer_email=data.customer_email or "",
+            payment_methods=data.payment_method_types or None,
             metadata={
                 **(data.metadata or {}),
                 "descriptor": data.description or "",
@@ -164,6 +165,8 @@ async def create_checkout_session(
         res = {
             "success": True,
             "session_id": fallback.get("checkout_id", ""),
+            "checkout_id": fallback.get("checkout_id", ""),
+            "checkout_url": fallback.get("checkout_url", ""),
             "payment_url": fallback.get("checkout_url", ""),
             "external_id": fallback.get("external_id", payload.get("external_id", "")),
             "raw": fallback,

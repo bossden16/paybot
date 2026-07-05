@@ -115,12 +115,15 @@ curl -X POST https://your-backend.example.com/api/v1/magpie/checkout/sessions \
   -H "X-API-Key: sk_live_your_magpie_secret_key" \
   -d '{
     "payment_method_types": ["card", "gcash"],
+    "payment_methods": ["card", "gcash"],
     "line_items": [{"name":"Test","amount":5000,"quantity":1}],
     "currency":"php",
     "success_url":"https://your-app.example.com/magpie-success?session_id={CHECKOUT_SESSION_ID}&payment_url={CHECKOUT_PAYMENT_URL}&amount={AMOUNT}",
     "cancel_url":"https://your-app.example.com/cancel"
   }'
 ```
+
+> Note: `payment_methods` must be supplied at the top level so Magpie can map the checkout to the supported channels correctly. This is required for compatible checkout creation in some Magpie environments.
 
 After payment, Magpie will redirect customers to the frontend route `/magpie-success` (or the backend static redirect which forwards there), preserving the session and payment_url query parameters.
 
