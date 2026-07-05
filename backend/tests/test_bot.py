@@ -1262,6 +1262,17 @@ class TestEvents:
         assert data["success"] is True
         assert data["amount"] == 500.0
 
+    def test_recent_events_returns_events(self, client, auth_headers):
+        r = client.get(
+            "/api/v1/events/recent",
+            params={"since": 0},
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data.get("events"), list)
+        assert "server_time" in data
+
 
 # ---------------------------------------------------------------------------
 # Demo / seed data
