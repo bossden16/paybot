@@ -28,7 +28,8 @@ async def check_database_health() -> bool:
 
 async def sync_database_sequences():
     """Synchronize PostgreSQL sequences with table max IDs to prevent unique constraint violations."""
-    if "postgresql" not in str(db_manager.database_url).lower():
+    from core.config import settings
+    if "postgresql" not in str(settings.database_url).lower():
         return
 
     logger.info("🔧 Synchronizing database sequences...")
