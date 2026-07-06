@@ -46,6 +46,9 @@ import ScanQRPH from './pages/ScanQRPH';
 import HomePage from './pages/Index';
 import MagpieSuccess from './pages/MagpieSuccess';
 import Checkout from './pages/Checkout';
+import QRCodesPage from './pages/QRCodesPage';
+
+const queryClient = new QueryClient();
 
 const queryClient = new QueryClient();
 
@@ -136,6 +139,7 @@ function AuthAwareShell() {
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/payments" element={<CreatePayment />} />
             <Route path="/create-payment" element={<CreatePayment />} />
+            <Route path="/qr-codes" element={<QRCodesPage />} />
             <Route path="/scan-qrph" element={<ScanQRPH />} />
             <Route path="/disbursements" element={<DisbursementsPage />} />
             <Route path="/reports" element={<ReportsPage />} />

@@ -36,6 +36,7 @@ interface NavItem {
 const userNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Payments Hub', icon: CreditCard, path: '/payments' },
+  { label: 'QR Codes', icon: QrCode, path: '/qr-codes' },
   { label: 'Disbursements', icon: Send, path: '/disbursements' },
   { label: 'Transactions', icon: FileText, path: '/transactions' },
   { label: 'Reports', icon: BarChart3, path: '/reports' },

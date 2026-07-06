@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import {
   Select,
   SelectContent,
@@ -14,83 +22,66 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  FileText,
-  QrCode,
-  LinkIcon,
   Plus,
   Loader2,
   CheckCircle,
   Copy,
   ExternalLink,
+  ChevronLeft,
+  Calendar,
+  Clock,
+  ShieldCheck,
+  Settings2,
+  User,
+  CreditCard,
+  Bot,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
+import { APP_NAME } from '@/lib/brand';
 
 const METHOD_OPTIONS = [
-  { value: 'visa', label: 'Visa' },
-  { value: 'mastercard', label: 'Mastercard' },
-  { value: 'jcb', label: 'JCB' },
-  { value: 'amex', label: 'Amex' },
-  { value: 'unionpay', label: 'UnionPay' },
-  { value: 'apple_pay', label: 'Apple Pay' },
-  { value: 'google_pay', label: 'Google Pay' },
-  { value: 'gcash', label: 'GCash' },
-  { value: 'grabpay', label: 'GrabPay' },
-  { value: 'maya', label: 'Maya' },
-  { value: 'alipay', label: 'Alipay' },
-  { value: 'wechat_pay', label: 'WeChat Pay' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'instapay', label: 'InstaPay' },
-  { value: 'pesonet', label: 'PESONet' },
-  { value: 'qrph', label: 'QRPH' },
-  { value: 'paypal', label: 'PayPal' },
+  { value: 'visa', label: 'Visa', logo: '/logos/visa.svg' },
+  { value: 'mastercard', label: 'Mastercard', logo: '/logos/mastercard.svg' },
+  { value: 'gcash', label: 'GCash', logo: '/logos/gcash.svg' },
+  { value: 'maya', label: 'Maya', logo: '/logos/maya.svg' },
+  { value: 'grabpay', logo: '/logos/grab.svg' },
 ] as const;
-
-const QR_METHODS = new Set(['qrph', 'maya', 'gcash', 'grabpay', 'alipay', 'wechat_pay']);
 
 export default function CreatePayment() {
   const { user, permissions, isSuperAdmin } = useAuth();
   const [searchParams] = useSearchParams();
-  const initialType = searchParams.get('type') || 'invoice';
+  const navigate = useNavigate();
 
-  const [paymentType, setPaymentType] = useState(initialType);
+  // Main Form State
+  const [referenceId, setReferenceId] = useState(`REF-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
+  const [paymentDetailMode, setPaymentDetailMode] = useState('total_only');
   const [amount, setAmount] = useState(searchParams.get('amount') || '');
   const [description, setDescription] = useState(searchParams.get('description') || '');
-  const [descriptor, setDescriptor] = useState(searchParams.get('descriptor') || '');
-  const [merchantName, setMerchantName] = useState(searchParams.get('merchant_name') || '');
+  const [enableMultiplePayments, setEnableMultiplePayments] = useState(false);
+
+  // Optional / Advanced State
   const [customerName, setCustomerName] = useState(searchParams.get('customer_name') || '');
   const [customerEmail, setCustomerEmail] = useState(searchParams.get('customer_email') || '');
+  const [shippingFee, setShippingFee] = useState('0');
+  const [dueDate, setDueDate] = useState('');
+  const [dueTime, setDueTime] = useState('');
+  const [successUrl, setSuccessUrl] = useState('');
+  const [cancelUrl, setCancelUrl] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState<string[]>(['card', 'gcash', 'paymaya']);
+
   const [apiKey, setApiKey] = useState(localStorage.getItem('payment_api_key') || '');
-  const [paymentMethods, setPaymentMethods] = useState<string[]>(
-    (searchParams.get('payment_methods') || '')
-      .split(',')
-      .map((m) => m.trim())
-      .filter(Boolean)
-  );
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   const canAccessPayments = Boolean(isSuperAdmin || permissions?.can_manage_payments);
 
-  const visibleMethods = useMemo(
-    () => METHOD_OPTIONS.filter((m) => (paymentType === 'qr_code' ? QR_METHODS.has(m.value) : true)),
-    [paymentType]
-  );
-
-  useEffect(() => {
-    const allowed = new Set(visibleMethods.map((m) => m.value));
-    setPaymentMethods((prev) => prev.filter((m) => allowed.has(m)));
-  }, [visibleMethods]);
-
-  useEffect(() => {
-    if (apiKey.trim()) {
-      localStorage.setItem('payment_api_key', apiKey.trim());
-    }
-  }, [apiKey]);
-
-  const togglePaymentMethod = (method: string) => {
-    setPaymentMethods((prev) => (prev.includes(method) ? prev.filter((m) => m !== method) : [...prev, method]));
-  };
+  const totalAmount = useMemo(() => {
+    const sub = parseFloat(amount) || 0;
+    const ship = parseFloat(shippingFee) || 0;
+    return sub + ship;
+  }, [amount, shippingFee]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,19 +99,20 @@ export default function CreatePayment() {
     setResult(null);
 
     try {
-      let endpoint = '';
-      let payload: Record<string, unknown> = {};
-
-      if (paymentType === 'invoice') {
-        endpoint = '/api/v1/xend/create-invoice';
-        payload = { amount: parseFloat(amount), description, descriptor: descriptor.trim() || undefined, merchant_name: merchantName.trim() || undefined, customer_name: customerName, customer_email: customerEmail, payment_methods: paymentMethods };
-      } else if (paymentType === 'qr_code') {
-        endpoint = '/api/v1/xend/create-qr-code';
-        payload = { amount: parseFloat(amount), description, descriptor: descriptor.trim() || undefined, merchant_name: merchantName.trim() || undefined, payment_methods: paymentMethods };
-      } else {
-        endpoint = '/api/v1/xend/create-payment-link';
-        payload = { amount: parseFloat(amount), description, descriptor: descriptor.trim() || undefined, merchant_name: merchantName.trim() || undefined, customer_name: customerName, customer_email: customerEmail, payment_methods: paymentMethods };
-      }
+      const endpoint = '/api/v1/xend/create-payment-link';
+      const payload = {
+        amount: parseFloat(amount),
+        shipping_fee: parseFloat(shippingFee),
+        description,
+        external_id: referenceId,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        payment_methods: paymentMethods,
+        multiple_payments: enableMultiplePayments,
+        expires_at: dueDate && dueTime ? `${dueDate}T${dueTime}:00Z` : undefined,
+        success_url: successUrl || undefined,
+        cancel_url: cancelUrl || undefined,
+      };
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -139,12 +131,12 @@ export default function CreatePayment() {
         toast.error(data?.detail || data?.message || `Error ${res.status}`);
       } else if (data?.success) {
         setResult(responseData);
-        toast.success(data.message || 'Payment created successfully!');
+        toast.success('Payment link created successfully!');
       } else {
         toast.error(data?.message || 'Failed to create payment');
       }
     } catch (err: unknown) {
-      toast.error((err as Error)?.message || 'Failed to create payment');
+      toast.error('Connection error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -155,19 +147,11 @@ export default function CreatePayment() {
     toast.success('Copied to clipboard');
   };
 
-  const typeConfig = {
-    invoice: { icon: <FileText className="h-5 w-5" />, color: 'text-blue-400', bg: 'bg-blue-500/20' },
-    qr_code: { icon: <QrCode className="h-5 w-5" />, color: 'text-purple-400', bg: 'bg-purple-500/20' },
-    payment_link: { icon: <LinkIcon className="h-5 w-5" />, color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
-  };
-
-  const currentType = typeConfig[paymentType as keyof typeof typeConfig] || typeConfig.invoice;
-
   if (!canAccessPayments) {
     return (
       <Layout>
         <div className="max-w-3xl mx-auto rounded-2xl border border-red-200 bg-red-50/80 p-8 text-center shadow-sm">
-          <h1 className="text-2xl font-semibold text-red-700">Access restricted</h1>
+          <h1 className="text-2xl font-semibold text-red-700 text-headline">Access restricted</h1>
           <p className="mt-3 text-sm text-red-600">Only users with payment management permission can create payment collection requests.</p>
         </div>
       </Layout>
@@ -176,292 +160,346 @@ export default function CreatePayment() {
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-foreground mb-6">Create Payment</h1>
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="flex flex-col gap-1 mb-10">
+          <Link to="/" className="flex items-center text-xs font-bold text-slate-400 hover:text-blue-500 transition-colors uppercase tracking-widest mb-2">
+            <ChevronLeft className="h-3 w-3 mr-1" /> Back
+          </Link>
+          <h1 className="text-3xl font-black tracking-tight text-foreground">Create Payment Link</h1>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Form */}
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center space-x-2">
-                <div className={`h-8 w-8 ${currentType.bg} rounded-lg flex items-center justify-center ${currentType.color}`}>
-                  {currentType.icon}
-                </div>
-                <span>Payment Details</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label className="text-muted-foreground">Payment Type</Label>
-                  <Select value={paymentType} onValueChange={setPaymentType}>
-                    <SelectTrigger className="mt-1 bg-muted border-border text-foreground">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-muted border-border">
-                      <SelectItem value="invoice" className="text-foreground">
-                        <div className="flex items-center space-x-2">
-                          <FileText className="h-4 w-4 text-blue-400" />
-                          <span>Invoice</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="qr_code" className="text-foreground">
-                        <div className="flex items-center space-x-2">
-                          <QrCode className="h-4 w-4 text-purple-400" />
-                          <span>QR Code</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="payment_link" className="text-foreground">
-                        <div className="flex items-center space-x-2">
-                          <LinkIcon className="h-4 w-4 text-cyan-400" />
-                          <span>Payment Link</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-12 items-start">
 
-                <div>
-                  <Label className="text-muted-foreground">Amount (PHP)</Label>
+          {/* LEFT COLUMN: FORM DETAILS */}
+          <div className="space-y-10 animate-slide-in-up">
+
+            {/* Order Details Card */}
+            <div className="bg-card border border-border/60 rounded-[2rem] p-10 space-y-10 shadow-xl shadow-black/[0.02]">
+              <div className="flex items-center justify-between border-b border-border/50 pb-6">
+                <h2 className="text-xl font-black text-foreground">Order Details</h2>
+                <div className="h-10 w-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                  <FileText className="h-5 w-5 text-blue-500" />
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                <div className="space-y-3">
+                  <Label htmlFor="ref-id" className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    Reference ID *
+                  </Label>
                   <Input
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                    id="ref-id"
+                    value={referenceId}
+                    onChange={(e) => setReferenceId(e.target.value)}
+                    placeholder="e.g. INV-2024-001"
+                    className="h-14 bg-muted/20 border-border/60 rounded-2xl px-5 text-base font-bold focus:ring-blue-500/20"
                     required
                   />
+                  <div className="flex items-center gap-1.5 pl-1">
+                    <span className="h-1 w-1 bg-blue-500 rounded-full" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unique identifier for this transaction</p>
+                  </div>
                 </div>
 
-                <div>
-                  <Label className="text-muted-foreground">Description</Label>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    Payment Details *
+                  </Label>
+                  <RadioGroup value={paymentDetailMode} onValueChange={setPaymentDetailMode} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className={`flex items-center space-x-3 p-4 rounded-2xl border transition-all cursor-pointer ${paymentDetailMode === 'total_only' ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/20' : 'border-border/60 hover:bg-muted/30'}`} onClick={() => setPaymentDetailMode('total_only')}>
+                      <RadioGroupItem value="total_only" id="r1" className="text-blue-600" />
+                      <Label htmlFor="r1" className="text-xs font-bold cursor-pointer text-foreground">Fixed Total Only</Label>
+                    </div>
+                    <div className={`flex items-center space-x-3 p-4 rounded-2xl border transition-all cursor-pointer ${paymentDetailMode === 'items' ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/20' : 'border-border/60 hover:bg-muted/30'}`} onClick={() => setPaymentDetailMode('items')}>
+                      <RadioGroupItem value="items" id="r2" className="text-blue-600" />
+                      <Label htmlFor="r2" className="text-xs font-bold cursor-pointer text-foreground">Line Itemized</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    Amount Due *
+                  </Label>
+                  <div className="flex gap-3">
+                    <div className="w-28">
+                      <Select defaultValue="php">
+                        <SelectTrigger className="h-14 bg-muted/20 border-border/60 rounded-2xl font-bold px-4">
+                          <SelectValue placeholder="PHP" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="php">PHP ₱</SelectItem>
+                          <SelectItem value="usd">USD $</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="flex-1 h-14 bg-muted/20 border-border/60 rounded-2xl px-6 text-xl font-black tracking-tight"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 pl-1">
+                    <span className="h-1 w-1 bg-red-500 rounded-full" />
+                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Required field</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    Description
+                  </Label>
                   <Textarea
-                    placeholder="Payment description..."
+                    placeholder="Enter payment purpose for the customer..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none"
-                    rows={3}
+                    className="min-h-[140px] bg-muted/20 border-border/60 rounded-[1.5rem] px-5 py-4 resize-none text-sm leading-relaxed"
                   />
                 </div>
+              </div>
+            </div>
 
-                <div>
-                  <Label className="text-muted-foreground">Payment Methods ({paymentMethods.length} selected)</Label>
-                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {visibleMethods.map((method) => {
-                      const selected = paymentMethods.includes(method.value);
-                      return (
-                        <button
-                          key={method.value}
-                          type="button"
-                          onClick={() => togglePaymentMethod(method.value)}
-                          className={`rounded-md border px-2.5 py-1.5 text-xs text-left transition-smooth ${
-                            selected
-                              ? 'border-blue-500/60 bg-blue-500/15 text-blue-300'
-                              : 'border-border bg-muted text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          {method.label}
-                        </button>
-                      );
-                    })}
+            {/* Multiple Payments Toggle */}
+            <div className="flex items-center justify-between p-8 bg-white border border-border/60 rounded-[2rem] shadow-lg shadow-black/[0.01]">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-foreground">Enable Multiple Payments</span>
+                  <Info className="h-3.5 w-3.5 text-slate-400" />
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">Allow this link to be paid multiple times by different customers.</p>
+              </div>
+              <Switch checked={enableMultiplePayments} onCheckedChange={setEnableMultiplePayments} className="data-[state=checked]:bg-blue-600" />
+            </div>
+
+            {/* Accordion Sections */}
+            <Accordion type="single" collapsible className="space-y-4">
+
+              {/* Customer Details */}
+              <AccordionItem value="customer" className="border border-border/60 rounded-[2rem] bg-card px-8 overflow-hidden shadow-sm transition-all hover:border-border">
+                <AccordionTrigger className="hover:no-underline py-8">
+                  <div className="flex items-center gap-5">
+                    <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center">
+                      <User className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <div className="text-left space-y-0.5">
+                      <span className="text-base font-black text-foreground block">Customer Details</span>
+                      <span className="text-xs text-muted-foreground font-medium">Pre-fill buyer info for faster checkout.</span>
+                    </div>
+                    <Badge variant="outline" className="ml-4 text-[10px] font-black uppercase tracking-widest border-slate-200 text-slate-400">OPTIONAL</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Select which payment methods to offer. Leave unselected to allow all gateway-supported methods.
-                  </p>
-                </div>
-
-                <div>
-                  <Label className="text-muted-foreground">API Key (optional)</Label>
-                  <Input
-                    placeholder="sk_live_..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">If provided, requests include an <code>X-API-Key</code> header. Generate keys in Developer Tools.</p>
-                </div>
-
-                <div>
-                  <Label className="text-muted-foreground">Merchant Name</Label>
-                  <Input
-                    placeholder="e.g. Click Store"
-                    value={merchantName}
-                    onChange={(e) => setMerchantName(e.target.value)}
-                    className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Shown to payer on checkout page
-                  </p>
-                </div>
-
-                <div>
-                  <Label className="text-muted-foreground">Bank Descriptor</Label>
-                  <Input
-                    placeholder="e.g. CLICK STORE PH"
-                    value={descriptor}
-                    onChange={(e) => setDescriptor(e.target.value.slice(0, 22))}
-                    maxLength={22}
-                    className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Shown on payer&apos;s bank statement · {descriptor.length}/22 chars
-                  </p>
-                </div>
-
-                {paymentType !== 'qr_code' && (
-                  <>
-                    <div>
-                      <Label className="text-muted-foreground">Customer Name</Label>
+                </AccordionTrigger>
+                <AccordionContent className="pb-10 space-y-8 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Customer Name</Label>
                       <Input
-                        placeholder="John Doe"
+                        placeholder="e.g. John Doe"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                        className="h-12 bg-muted/20 border-border/60 rounded-xl"
                       />
                     </div>
-                    <div>
-                      <Label className="text-muted-foreground">Customer Email</Label>
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Email Address</Label>
                       <Input
                         type="email"
                         placeholder="john@example.com"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
-                        className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                        className="h-12 bg-muted/20 border-border/60 rounded-xl"
                       />
                     </div>
-                  </>
-                )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Advanced Settings */}
+              <AccordionItem value="advanced" className="border border-border/60 rounded-[2rem] bg-card px-8 overflow-hidden shadow-sm transition-all hover:border-border">
+                <AccordionTrigger className="hover:no-underline py-8">
+                  <div className="flex items-center gap-5">
+                    <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center">
+                      <Settings2 className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <div className="text-left space-y-0.5">
+                      <span className="text-base font-black text-foreground block">Advanced Settings</span>
+                      <span className="text-xs text-muted-foreground font-medium">Expiry, redirects, and custom methods.</span>
+                    </div>
+                    <Badge variant="outline" className="ml-4 text-[10px] font-black uppercase tracking-widest border-slate-200 text-slate-400">OPTIONAL</Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-10 space-y-12 pt-6 border-t border-border/50">
+
+                  {/* Due Date */}
+                  <div className="space-y-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Payment Due Date and Time</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] text-muted-foreground font-bold pl-1 uppercase tracking-widest">Expiry Date</Label>
+                        <div className="relative group">
+                          <Input
+                            type="date"
+                            value={dueDate}
+                            onChange={(e) => setDueDate(e.target.value)}
+                            className="h-12 bg-muted/20 border-border/60 rounded-xl pl-12 group-hover:border-blue-500/30 transition-colors"
+                          />
+                          <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] text-muted-foreground font-bold pl-1 uppercase tracking-widest">Expiry Time</Label>
+                        <div className="relative group">
+                          <Input
+                            type="time"
+                            value={dueTime}
+                            onChange={(e) => setDueTime(e.target.value)}
+                            className="h-12 bg-muted/20 border-border/60 rounded-xl pl-12 group-hover:border-blue-500/30 transition-colors"
+                          />
+                          <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Methods */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Accepted Payment Methods</p>
+                      <Button variant="outline" size="sm" type="button" className="h-8 text-[10px] font-black uppercase tracking-widest rounded-lg border-slate-200">MANAGE</Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-6 py-4 px-6 bg-muted/10 rounded-2xl border border-border/40 opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-500">
+                      {METHOD_OPTIONS.map(m => (
+                        <div key={m.value} className="h-6 w-12 flex items-center justify-center">
+                          <img src={m.logo} alt={m.label} className="max-h-full max-w-full object-contain" />
+                        </div>
+                      ))}
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-l border-border/60 pl-6">+ 12 More Channels</span>
+                    </div>
+                  </div>
+
+                  {/* Redirect URLs */}
+                  <div className="space-y-8">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Payment Redirect URLs</p>
+                    <div className="space-y-5">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest pl-1">Successful Redirect</Label>
+                        <Input
+                          placeholder="https://yourstore.com/checkout/success"
+                          value={successUrl}
+                          onChange={(e) => setSuccessUrl(e.target.value)}
+                          className="h-12 bg-muted/20 border-border/60 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest pl-1">Failure Redirect</Label>
+                        <Input
+                          placeholder="https://yourstore.com/checkout/failed"
+                          value={cancelUrl}
+                          onChange={(e) => setCancelUrl(e.target.value)}
+                          className="h-12 bg-muted/20 border-border/60 rounded-xl"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+
+          {/* RIGHT COLUMN: SUMMARY SECTION */}
+          <div className="space-y-8 sticky top-24 animate-slide-in-right">
+            <Card className="border border-border/60 bg-white shadow-2xl shadow-black/[0.03] rounded-[2.5rem] overflow-hidden">
+              <div className="bg-slate-50 px-10 py-8 border-b border-border/40">
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Payment Summary</CardTitle>
+              </div>
+              <CardContent className="px-10 py-10 space-y-10">
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Subtotal</span>
+                    <span className="text-foreground font-black tracking-tight">₱ {parseFloat(amount || '0').toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm gap-8">
+                    <span className="text-slate-500 font-bold uppercase tracking-widest text-[10px] shrink-0">Shipping</span>
+                    <div className="relative flex-1 max-w-[140px]">
+                      <Input
+                        type="number"
+                        value={shippingFee}
+                        onChange={(e) => setShippingFee(e.target.value)}
+                        className="h-10 text-right pr-12 bg-muted/20 border-border/60 rounded-xl font-black text-xs"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">PHP</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-8 border-t border-border/60">
+                    <span className="text-xs font-black text-foreground uppercase tracking-widest">Total Due</span>
+                    <span className="text-3xl font-black text-blue-600 tracking-tighter">₱ {totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 pt-4">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimated Expiry</p>
+                  </div>
+                  <p className="text-xs font-black text-foreground tracking-tight">
+                    {dueDate ? `${new Date(dueDate).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'Standard (24 Hours)'}
+                    {dueTime ? ` at ${dueTime}` : ''}
+                  </p>
+                </div>
 
                 <Button
                   type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={loading || !amount}
+                  className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-[0.2em] rounded-3xl shadow-2xl shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] mt-4"
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create {paymentType === 'qr_code' ? 'QR Code' : paymentType === 'payment_link' ? 'Payment Link' : 'Invoice'}
-                    </>
-                  )}
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : 'Generate Payment Link'}
                 </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Result */}
-          <div className="space-y-6">
-            <Card className="bg-card border-border h-full overflow-hidden flex flex-col">
-              <CardHeader>
-                <CardTitle className="text-foreground flex items-center justify-between">
-                  <span>Checkout Preview</span>
-                  {result && (
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                      Live
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                {!result ? (
-                  <div className="text-center py-20 flex-1 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-3xl m-2 bg-muted/20">
-                    <div className="h-16 w-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
-                      <Plus className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-muted-foreground font-medium">Ready for creation</p>
-                    <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Fill in the details to generate your branded checkout link.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6 animate-fade-in">
-                    {/* Branded "Mini Checkout" look */}
-                    <div className="rounded-3xl border border-white/[0.08] bg-[#080E1A] p-6 shadow-2xl overflow-hidden relative group">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-3xl -mr-16 -mt-16 group-hover:bg-blue-600/20 transition-colors" />
-
-                      <div className="flex items-center gap-2 mb-6">
-                        <div className="h-7 w-7 bg-blue-600 rounded-lg flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-white" />
-                        </div>
-                        <span className="text-xs font-black tracking-tight text-white">{APP_NAME} <span className="text-blue-400 font-medium">Link</span></span>
-                      </div>
-
-                      <div className="space-y-4 relative z-10">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold mb-1">Total Amount</p>
-                          <p className="text-3xl font-black tracking-tighter text-white">₱ {parseFloat(amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-                        </div>
-
-                        <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-3">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-slate-500">Merchant</span>
-                            <span className="text-slate-200 font-medium">{merchantName || 'PayBot Philippines'}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-slate-500">Method</span>
-                            <span className="text-slate-200 font-medium capitalize">{paymentType.replace('_', ' ')}</span>
-                          </div>
-                        </div>
-
-                        {/* Primary Action */}
-                        {(result.payment_url || result.checkout_url || result.invoice_url) && (
-                          <Button asChild className="w-full h-12 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold shadow-lg shadow-blue-600/20">
-                            <a href={(result.payment_url || result.checkout_url || result.invoice_url) as string} target="_blank" rel="noopener noreferrer">
-                              Open Link <ExternalLink className="h-4 w-4 ml-2" />
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest px-1">Raw API Metadata</p>
-                      {Object.entries(result)
-                        .filter(([key, value]) => value != null && key !== 'success' && key !== 'message')
-                        .map(([key, value]) => {
-                          const stringValue = String(value);
-                          const isUrl = stringValue.startsWith('http');
-                          return (
-                            <div key={key} className="space-y-1 group">
-                              <Label className="text-[10px] text-muted-foreground uppercase tracking-widest pl-1">
-                                {key.replace(/_/g, ' ')}
-                              </Label>
-                              <div className="flex items-center space-x-2 bg-muted/50 p-2.5 rounded-2xl border border-border/50 group-hover:border-blue-500/30 transition-colors">
-                                {isUrl ? (
-                                  <a
-                                    href={stringValue}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-400 hover:text-blue-300 underline break-all flex-1"
-                                  >
-                                    {stringValue}
-                                  </a>
-                                ) : (
-                                  <code className="text-xs text-foreground font-mono break-all flex-1">
-                                    {stringValue}
-                                  </code>
-                                )}
-                                <button
-                                  onClick={() => copyToClipboard(stringValue)}
-                                  className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
+
+            {/* Results Display */}
+            {result && (
+              <Card className="border-2 border-emerald-500/20 bg-emerald-500/5 rounded-[2rem] p-8 animate-fade-in-up">
+                <div className="flex items-center gap-3 text-emerald-600 mb-6">
+                  <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5" />
+                  </div>
+                  <span className="font-black text-xs uppercase tracking-widest">Link Created Successfully</span>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-5 bg-white border border-emerald-500/10 rounded-2xl shadow-inner group">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Public Checkout URL</p>
+                    <div className="flex items-center gap-3">
+                      <code className="text-xs font-mono text-emerald-700 break-all flex-1 font-bold">
+                        {String(result.payment_url || result.checkout_url || result.invoice_url)}
+                      </code>
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-emerald-600 hover:bg-emerald-500/10 rounded-xl" onClick={() => copyToClipboard(String(result.payment_url || result.checkout_url || result.invoice_url))}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            <div className="px-8 text-center space-y-6">
+              <div className="flex justify-center items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">
+                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                Bank-Grade Security
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
+                Infrastructure secured by AES-256 encryption. Payments settled via BSP-regulated channels.
+              </p>
+            </div>
           </div>
-        </div>
+
+        </form>
       </div>
     </Layout>
   );
