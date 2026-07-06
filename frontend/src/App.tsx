@@ -45,11 +45,12 @@ import BotIntro from './pages/BotIntro';
 import ScanQRPH from './pages/ScanQRPH';
 import HomePage from './pages/Index';
 import MagpieSuccess from './pages/MagpieSuccess';
+import Checkout from './pages/Checkout';
 
 const queryClient = new QueryClient();
 
 // Paths that should remain accessible even during maintenance
-const MAINTENANCE_EXEMPT_PATHS = ['/home', '/intro', '/login', '/register', '/features', '/pricing', '/auth/callback', '/auth/error', '/logout-callback', '/maintenance'];
+const MAINTENANCE_EXEMPT_PATHS = ['/home', '/intro', '/login', '/register', '/features', '/pricing', '/auth/callback', '/auth/error', '/logout-callback', '/maintenance', '/checkout'];
 
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -154,6 +155,7 @@ function AuthAwareShell() {
             <Route path="/policies" element={<Policies />} />
             <Route path="/compliance" element={<Compliance />} />
             <Route path="/magpie-success" element={<MagpieSuccess />} />
+            <Route path="/checkout/:externalId" element={<Checkout />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PageFade>

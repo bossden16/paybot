@@ -316,85 +316,104 @@ export default function ScanQRPH() {
 
         {/* Step 2 — Review & Pay */}
         {qrData && !result && (
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground text-base flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  Step 2 — Review &amp; Pay
+          <Card className="bg-card border-border overflow-hidden rounded-[2rem] shadow-2xl">
+            <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500" />
+            <CardHeader className="pb-4">
+              <CardTitle className="text-foreground text-lg flex items-center justify-between">
+                <span className="flex items-center gap-2.5 font-black tracking-tight">
+                  <div className="h-8 w-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                    <ShieldCheck className="h-5 w-5 text-blue-400" />
+                  </div>
+                  Payment Details
                 </span>
-                <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={reset}>
+                <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground rounded-full" onClick={reset}>
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rescan
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Parsed QRPH info */}
-              <div className="rounded-lg bg-muted/60 p-4 space-y-2 text-sm">
-                {qrData.merchantName && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Merchant</span>
-                    <span className="text-foreground font-medium">{qrData.merchantName}</span>
+            <CardContent className="space-y-6 px-6 pb-8">
+              {/* Branded Summary Card */}
+              <div className="rounded-[1.5rem] bg-[#080E1A] border border-white/[0.08] p-6 space-y-4 shadow-inner relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-3xl -mr-16 -mt-16" />
+
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">Merchant</span>
+                  <p className="text-lg font-bold text-white flex items-center gap-2">
+                    {qrData.merchantName || 'Generic QRPH Merchant'}
+                    {qrData.isQRPH && <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">City</span>
+                    <p className="text-sm text-slate-300 font-medium">{qrData.merchantCity || 'Philippines'}</p>
                   </div>
-                )}
-                {qrData.merchantCity && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">City</span>
-                    <span className="text-foreground">{qrData.merchantCity}</span>
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">Network</span>
+                    <div className="pt-0.5">
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] px-2 py-0">
+                        {qrData.isQRPH ? 'QRPH Standard' : 'Generic QR'}
+                      </Badge>
+                    </div>
                   </div>
-                )}
-                {qrData.currency && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Currency</span>
-                    <Badge variant="outline" className="text-blue-400 border-blue-400/30">{qrData.currency}</Badge>
-                  </div>
-                )}
+                </div>
+
                 {qrData.referenceNumber && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Reference</span>
-                    <code className="text-xs text-muted-foreground bg-background px-1.5 py-0.5 rounded">{qrData.referenceNumber}</code>
+                  <div className="space-y-1 pt-2 border-t border-white/[0.05]">
+                    <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold">Reference</span>
+                    <code className="text-xs text-blue-300 font-mono block mt-1">{qrData.referenceNumber}</code>
                   </div>
                 )}
               </div>
 
               {/* Alert if not a QRPH */}
               {!qrData.isQRPH && (
-                <div className="flex items-start gap-2 text-amber-400 text-sm bg-amber-400/10 border border-amber-400/20 rounded-lg p-3">
+                <div className="flex items-start gap-3 text-amber-400 text-xs bg-amber-400/5 border border-amber-400/10 rounded-2xl p-4">
                   <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>This QR code may not be a standard QRPH. Verify the data before paying.</span>
+                  <span className="leading-relaxed">This QR code does not contain standard QRPH metadata. Please ensure you are sending the correct amount to the intended recipient.</span>
                 </div>
               )}
 
-              <div>
-                <Label className="text-muted-foreground">Amount (PHP)</Label>
-                <Input
-                  type="number" step="0.01" min="0.01"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                />
-              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold pl-1">Amount to Pay (PHP)</Label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₱</div>
+                    <Input
+                      type="number" step="0.01" min="0.01"
+                      placeholder="0.00"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="h-14 pl-8 bg-muted/50 border-border text-2xl font-black tracking-tight text-foreground placeholder:text-muted-foreground rounded-2xl focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <Label className="text-muted-foreground">Description (optional)</Label>
-                <Input
-                  placeholder="Payment note"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="mt-1 bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                />
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold pl-1">Note (optional)</Label>
+                  <Input
+                    placeholder="What is this for?"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="h-12 bg-muted/50 border-border text-sm text-foreground placeholder:text-muted-foreground rounded-2xl"
+                  />
+                </div>
               </div>
 
               <Button
                 onClick={handlePay}
                 disabled={loading || !amount}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg rounded-[1.25rem] shadow-xl shadow-blue-600/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
               >
                 {loading
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
-                  : <><Send className="h-4 w-4 mr-2" />Send Payment</>}
+                  ? <><Loader2 className="h-5 w-5 mr-3 animate-spin" />Processing Gateway...</>
+                  : <><Send className="h-5 w-5 mr-3" />Confirm & Send Payment</>}
               </Button>
+
+              <p className="text-[10px] text-center text-slate-500 uppercase tracking-[0.2em]">
+                <Lock className="h-3 w-3 inline mr-1 -mt-0.5" /> End-to-end encrypted session
+              </p>
             </CardContent>
           </Card>
         )}

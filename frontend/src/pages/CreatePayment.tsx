@@ -356,68 +356,111 @@ export default function CreatePayment() {
           </Card>
 
           {/* Result */}
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Result</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!result ? (
-                <div className="text-center py-12">
-                  <div className="h-16 w-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Plus className="h-8 w-8 text-muted-foreground" />
+          <div className="space-y-6">
+            <Card className="bg-card border-border h-full overflow-hidden flex flex-col">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center justify-between">
+                  <span>Checkout Preview</span>
+                  {result && (
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                      Live
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col">
+                {!result ? (
+                  <div className="text-center py-20 flex-1 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-3xl m-2 bg-muted/20">
+                    <div className="h-16 w-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+                      <Plus className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground font-medium">Ready for creation</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Fill in the details to generate your branded checkout link.</p>
                   </div>
-                  <p className="text-muted-foreground">Create a payment to see the result here</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2 text-emerald-400 mb-4">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="font-medium">Payment Created!</span>
-                  </div>
+                ) : (
+                  <div className="space-y-6 animate-fade-in">
+                    {/* Branded "Mini Checkout" look */}
+                    <div className="rounded-3xl border border-white/[0.08] bg-[#080E1A] p-6 shadow-2xl overflow-hidden relative group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-3xl -mr-16 -mt-16 group-hover:bg-blue-600/20 transition-colors" />
 
-                  {Object.entries(result)
-                    .filter(([key, value]) => value != null && key !== 'success' && key !== 'message')
-                    .map(([key, value]) => {
-                      const isUrl = typeof value === 'string' && (value.startsWith('http') || value.startsWith('https'));
-                      return (
-                        <div key={key} className="space-y-1">
-                          <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-                            {key.replace(/_/g, ' ')}
-                          </Label>
-                          <div className="flex items-center space-x-2">
-                            {isUrl ? (
-                              <a
-                                href={value as string}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-400 hover:text-blue-300 underline break-all flex-1"
-                              >
-                                {value as string}
-                              </a>
-                            ) : (
-                              <code className="text-sm text-foreground font-mono bg-muted px-2 py-1 rounded break-all flex-1">
-                                {String(value)}
-                              </code>
-                            )}
-                            <button
-                              onClick={() => copyToClipboard(String(value))}
-                              className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </button>
-                            {isUrl && (
-                              <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex-shrink-0">
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            )}
+                      <div className="flex items-center gap-2 mb-6">
+                        <div className="h-7 w-7 bg-blue-600 rounded-lg flex items-center justify-center">
+                          <Bot className="h-4 w-4 text-white" />
+                        </div>
+                        <span className="text-xs font-black tracking-tight text-white">{APP_NAME} <span className="text-blue-400 font-medium">Link</span></span>
+                      </div>
+
+                      <div className="space-y-4 relative z-10">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold mb-1">Total Amount</p>
+                          <p className="text-3xl font-black tracking-tighter text-white">₱ {parseFloat(amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                        </div>
+
+                        <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-3">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500">Merchant</span>
+                            <span className="text-slate-200 font-medium">{merchantName || 'PayBot Philippines'}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500">Method</span>
+                            <span className="text-slate-200 font-medium capitalize">{paymentType.replace('_', ' ')}</span>
                           </div>
                         </div>
-                      );
-                    })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+                        {/* Primary Action */}
+                        {(result.payment_url || result.checkout_url || result.invoice_url) && (
+                          <Button asChild className="w-full h-12 rounded-2xl bg-blue-600 hover:bg-blue-500 font-bold shadow-lg shadow-blue-600/20">
+                            <a href={(result.payment_url || result.checkout_url || result.invoice_url) as string} target="_blank" rel="noopener noreferrer">
+                              Open Link <ExternalLink className="h-4 w-4 ml-2" />
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest px-1">Raw API Metadata</p>
+                      {Object.entries(result)
+                        .filter(([key, value]) => value != null && key !== 'success' && key !== 'message')
+                        .map(([key, value]) => {
+                          const stringValue = String(value);
+                          const isUrl = stringValue.startsWith('http');
+                          return (
+                            <div key={key} className="space-y-1 group">
+                              <Label className="text-[10px] text-muted-foreground uppercase tracking-widest pl-1">
+                                {key.replace(/_/g, ' ')}
+                              </Label>
+                              <div className="flex items-center space-x-2 bg-muted/50 p-2.5 rounded-2xl border border-border/50 group-hover:border-blue-500/30 transition-colors">
+                                {isUrl ? (
+                                  <a
+                                    href={stringValue}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-400 hover:text-blue-300 underline break-all flex-1"
+                                  >
+                                    {stringValue}
+                                  </a>
+                                ) : (
+                                  <code className="text-xs text-foreground font-mono break-all flex-1">
+                                    {stringValue}
+                                  </code>
+                                )}
+                                <button
+                                  onClick={() => copyToClipboard(stringValue)}
+                                  className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </Layout>

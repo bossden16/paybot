@@ -291,57 +291,107 @@ export default function PaymentsHub() {
               </CardContent>
             </Card>
 
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-foreground">Result</CardTitle>
+            <Card className="bg-card border-border overflow-hidden flex flex-col shadow-2xl shadow-black/20">
+              <CardHeader className="bg-muted/30 border-b border-border/50">
+                <CardTitle className="text-foreground flex items-center justify-between">
+                  <span>Checkout Preview</span>
+                  {result && (
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                      Active Link
+                    </Badge>
+                  )}
+                </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 p-6">
                 {!result ? (
-                  <div className="text-center py-16">
-                    <CreditCard className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-sm text-muted-foreground">Your payment details will appear here after creation.</p>
+                  <div className="text-center py-24 flex-1 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-[2.5rem] bg-muted/10 opacity-60">
+                    <div className="h-20 w-20 bg-muted/40 rounded-full flex items-center justify-center mb-6">
+                      <CreditCard className="h-10 w-10 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground font-semibold text-lg tracking-tight">Awaiting Creation</p>
+                    <p className="text-sm text-slate-500 mt-2 max-w-[240px]">Configure your payment on the left to generate a professional checkout experience.</p>
                   </div>
                 ) : (
-                  <div className="space-y-5">
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-emerald-600">
-                      <div className="flex items-center gap-2 font-semibold">
-                        <CheckCircle className="h-5 w-5" /> Payment created successfully
+                  <div className="space-y-8 animate-fade-in-scale">
+                    {/* Branded "Mini Checkout" look */}
+                    <div className="rounded-[2.5rem] border border-white/[0.1] bg-slate-950 p-8 shadow-2xl overflow-hidden relative group transition-all hover:border-blue-500/30">
+                      <div className="absolute top-0 right-0 w-48 h-48 bg-blue-600/10 blur-[80px] -mr-24 -mt-24 group-hover:bg-blue-600/20 transition-all duration-700" />
+
+                      <div className="flex items-center gap-3 mb-8">
+                        <div className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30 group-hover:scale-110 transition-transform">
+                          <Bot className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-sm font-black tracking-widest text-white uppercase">{APP_NAME} <span className="text-blue-400 font-medium ml-1">Pay</span></span>
+                      </div>
+
+                      <div className="space-y-6 relative z-10">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-2">Total Amount Due</p>
+                          <p className="text-4xl font-black tracking-tighter text-white">₱ {parseFloat(amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                        </div>
+
+                        <div className="rounded-3xl bg-white/[0.03] border border-white/[0.05] p-5 space-y-4 backdrop-blur-sm shadow-inner">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500 font-medium">Recipient</span>
+                            <span className="text-slate-100 font-bold tracking-tight">{user?.name || 'PayBot Philippines'}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs pt-3 border-t border-white/[0.05]">
+                            <span className="text-slate-500 font-medium">Type</span>
+                            <span className="text-slate-100 font-bold tracking-tight capitalize">{activeTab.label}</span>
+                          </div>
+                        </div>
+
+                        {/* Primary Action */}
+                        {(result.payment_url || result.checkout_url || result.invoice_url || result.payment_link_url) && (
+                          <div className="pt-2">
+                            <Button asChild size="lg" className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-lg shadow-xl shadow-blue-600/20 transition-all hover:shadow-blue-600/40">
+                              <a href={(result.payment_url || result.checkout_url || result.invoice_url || result.payment_link_url) as string} target="_blank" rel="noopener noreferrer">
+                                Complete Payment <ArrowRight className="h-5 w-5 ml-3" />
+                              </a>
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
+
                     <div className="space-y-4">
-                      {Object.entries(result).map(([key, value]) => {
-                        if (!value || key === 'success') return null;
-                        const stringValue = String(value);
-                        const isUrl = stringValue.startsWith('http');
-                        return (
-                          <div key={key} className="space-y-1 rounded-2xl border border-border bg-muted p-3">
-                            <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">{key.replace(/_/g, ' ')}</div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {isUrl ? (
-                                <a href={stringValue} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-blue-400 hover:text-blue-300 underline">
-                                  {stringValue}
-                                </a>
-                              ) : (
-                                <code className="break-all text-sm font-mono text-foreground">{stringValue}</code>
-                              )}
-                              <Button variant="ghost" size="icon" onClick={() => copyText(stringValue)}>
-                                <Copy className="h-4 w-4" />
-                              </Button>
-                              {isUrl && (
-                                <a
-                                  href={stringValue}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="Open link in new tab"
-                                  className="text-muted-foreground hover:text-foreground"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </a>
-                              )}
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Transaction Metadata</p>
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-500/50" />
+                      </div>
+                      <div className="grid gap-3">
+                        {Object.entries(result).map(([key, value]) => {
+                          if (!value || key === 'success' || key === 'message') return null;
+                          const stringValue = String(value);
+                          const isUrl = stringValue.startsWith('http');
+                          return (
+                            <div key={key} className="group relative">
+                              <div className="flex items-center space-x-2 bg-muted/30 hover:bg-muted/50 p-3 rounded-2xl border border-border/40 hover:border-blue-500/30 transition-all duration-300">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1 truncate">{key.replace(/_/g, ' ')}</p>
+                                  {isUrl ? (
+                                    <a href={stringValue} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-blue-400 hover:text-blue-300 font-medium underline-offset-4 hover:underline">
+                                      {stringValue}
+                                    </a>
+                                  ) : (
+                                    <p className="truncate text-xs font-mono text-foreground font-medium">{stringValue}</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-all" onClick={() => copyText(stringValue)}>
+                                    <Copy className="h-3.5 w-3.5 text-slate-400" />
+                                  </Button>
+                                  {isUrl && (
+                                    <a href={stringValue} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-all">
+                                      <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
