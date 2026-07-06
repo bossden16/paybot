@@ -1,5 +1,4 @@
 import logging
-import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -96,16 +95,12 @@ async def ping_magpie(
     current_user: UserResponse = Depends(get_payment_user("payments:read")),
 ):
     """Check Magpie connectivity and API key validity."""
-    from core.config import settings
     service = MagpieService()
-    api_key_configured = bool(service.api_key)
-    base_url = service.base_url
-
-    if not api_key_configured:
+    if not service.api_key:
         return {
             "success": False,
             "configured": False,
-            "base_url": base_url,
+            "base_url": service.base_url,
             "error": "MAGPIE_API_KEY is not set",
         }
 
@@ -113,7 +108,7 @@ async def ping_magpie(
     return {
         "success": result.get("success", False),
         "configured": True,
-        "base_url": base_url,
+        "base_url": service.base_url,
         "error": result.get("error") if not result.get("success") else None,
     }
 
@@ -128,8 +123,7 @@ async def get_transaction_stats(
     return {"success": True, **stats}
 
 
-async def _create_checkout_transaction(
-    *,
+async def _process_xend_request(
     db: AsyncSession,
     current_user: UserResponse,
     request: CreatePaymentRequest,
@@ -137,9 +131,6 @@ async def _create_checkout_transaction(
     external_prefix: str,
     use_qr: bool,
 ):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
-
     payment_methods, invalid_methods = _normalize_payment_methods(request.payment_methods)
     if invalid_methods:
         raise HTTPException(
@@ -148,67 +139,28 @@ async def _create_checkout_transaction(
         )
 
     service = MagpieService()
-    external_id = request.external_id or f"{external_prefix}-{uuid.uuid4().hex[:12]}"
-    merchant_name = (request.merchant_name or "").strip()
-    descriptor = (request.descriptor or "").strip().upper()[:22]
-    base_description = (request.description or "").strip() or "magpie payment"
-
-    if not getattr(service, "api_key", None):
-        return {
-            "success": False,
-            "message": "Magpie API key is not configured",
-            "error": "MAGPIE_API_KEY is not set",
-        }
-
-    # Keep the user description intact while injecting descriptor/merchant context
-    # so checkout pages and records visibly reflect these settings.
-    checkout_desc = base_description
-    if descriptor and descriptor not in checkout_desc:
-        checkout_desc = f"{descriptor} | {checkout_desc}"
-    elif merchant_name and merchant_name not in checkout_desc:
-        checkout_desc = f"{merchant_name} | {checkout_desc}"
-
-    metadata: dict[str, object] = {"source": "magpie"}
-    if payment_methods:
-        metadata["payment_methods"] = payment_methods
-    if merchant_name:
-        metadata["merchant_name"] = merchant_name
-    if descriptor:
-        metadata["descriptor"] = descriptor
-
     try:
-        if use_qr:
-            result = await service.create_qr_payment(
-                amount=request.amount,
-                description=checkout_desc,
-                external_id=external_id,
-                payment_methods=payment_methods,
-                merchant_name=merchant_name,
-                descriptor=descriptor,
-            )
-        else:
-            result = await service.create_checkout(
-                amount=request.amount,
-                description=checkout_desc,
-                descriptor=descriptor,
-                merchant_name=merchant_name,
-                customer_name=request.customer_name,
-                customer_email=request.customer_email,
-                external_id=external_id,
-                payment_methods=payment_methods,
-                metadata=metadata,
-            )
+        result = await service.create_unified_checkout(
+            amount=request.amount,
+            description=request.description,
+            transaction_type=transaction_type,
+            external_prefix=external_prefix,
+            use_qr=use_qr,
+            merchant_name=request.merchant_name,
+            descriptor=request.descriptor,
+            customer_name=request.customer_name,
+            customer_email=request.customer_email,
+            payment_methods=payment_methods,
+            external_id=request.external_id or None,
+        )
     except Exception as exc:
-        logger.exception("Magpie payment creation failed for %s", external_id)
-        return {
-            "success": False,
-            "message": "Payment creation failed",
-            "error": str(exc),
-        }
+        logger.exception("Magpie payment creation failed")
+        return {"success": False, "message": "Payment creation failed", "error": str(exc)}
 
     if not result.get("success"):
         return {"success": False, "message": result.get("error", "Failed to create payment")}
 
+    # Record transaction
     txn_id = None
     try:
         txn_service = TransactionsService(db)
@@ -216,37 +168,23 @@ async def _create_checkout_transaction(
             user_id=str(current_user.id),
             transaction_type=transaction_type,
             amount=request.amount,
-            external_id=result.get("external_id", external_id),
-            gateway_id=result.get("checkout_id", "") or result.get("qr_id", ""),
+            external_id=result.get("external_id"),
+            gateway_id=result.get("gateway_id"),
             description=request.description,
             customer_name=request.customer_name,
             customer_email=request.customer_email,
-            payment_url=result.get("checkout_url", "") or result.get("redirect_url", "") or result.get("qr_content", ""),
+            payment_url=result.get("payment_url"),
         )
         txn_id = txn.id
     except Exception as exc:
-        logger.error("Failed to record transaction after Magpie success: %s", exc, exc_info=True)
+        logger.error("Failed to record transaction: %s", exc, exc_info=True)
 
     return {
         "success": True,
         "message": f"magpie {transaction_type.replace('_', ' ')} created",
         "data": {
             "transaction_id": txn_id,
-            "external_id": result.get("external_id", external_id),
-            "checkout_id": result.get("checkout_id", ""),
-            "invoice_id": result.get("checkout_id", ""),
-            "payment_link_id": result.get("checkout_id", ""),
-            "qr_id": result.get("qr_id", ""),
-            "invoice_url": result.get("checkout_url", "") or result.get("redirect_url", ""),
-            "checkout_url": result.get("checkout_url", "") or result.get("redirect_url", ""),
-            "payment_link_url": result.get("checkout_url", "") or result.get("redirect_url", ""),
-            "qr_image_url": result.get("qr_content", "") or result.get("redirect_url", ""),
-            "amount": request.amount,
-            "payment_methods": payment_methods,
-            "merchant_name": merchant_name,
-            "descriptor": descriptor,
-            "applied_description": checkout_desc,
-            "gateway": "magpie",
+            **result
         },
     }
 
@@ -257,7 +195,7 @@ async def create_invoice(
     current_user: UserResponse = Depends(get_payment_user("payments:write")),
     db: AsyncSession = Depends(get_db),
 ):
-    return await _create_checkout_transaction(
+    return await _process_xend_request(
         db=db,
         current_user=current_user,
         request=data,
@@ -273,7 +211,7 @@ async def create_payment_link(
     current_user: UserResponse = Depends(get_payment_user("payments:write")),
     db: AsyncSession = Depends(get_db),
 ):
-    return await _create_checkout_transaction(
+    return await _process_xend_request(
         db=db,
         current_user=current_user,
         request=data,
@@ -289,7 +227,7 @@ async def create_qr_code(
     current_user: UserResponse = Depends(get_payment_user("payments:write")),
     db: AsyncSession = Depends(get_db),
 ):
-    return await _create_checkout_transaction(
+    return await _process_xend_request(
         db=db,
         current_user=current_user,
         request=data,
@@ -312,7 +250,7 @@ async def pay_qrph(
         external_id=data.reference_number,
         payment_methods=["qrph"],
     )
-    return await _create_checkout_transaction(
+    return await _process_xend_request(
         db=db,
         current_user=current_user,
         request=request,

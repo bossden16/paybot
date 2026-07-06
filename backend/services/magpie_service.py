@@ -516,6 +516,80 @@ class MagpieService:
             "raw": fallback.get("raw", {}),
         }
 
+    async def create_unified_checkout(
+        self,
+        *,
+        amount: float,
+        description: str,
+        transaction_type: str,
+        external_prefix: str,
+        use_qr: bool,
+        merchant_name: str = "",
+        descriptor: str = "",
+        customer_name: str = "",
+        customer_email: str = "",
+        payment_methods: Optional[List[str]] = None,
+        external_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Unified method for creating various payment types (invoice, link, QR)."""
+        if amount <= 0:
+             return {"success": False, "error": "Amount must be greater than zero"}
+
+        final_external_id = external_id or f"{external_prefix}-{uuid.uuid4().hex[:12]}"
+
+        # Format description
+        checkout_desc = description.strip() or "magpie payment"
+        if descriptor and descriptor not in checkout_desc:
+            checkout_desc = f"{descriptor.upper()[:22]} | {checkout_desc}"
+        elif merchant_name and merchant_name not in checkout_desc:
+            checkout_desc = f"{merchant_name} | {checkout_desc}"
+
+        final_metadata = {"source": "magpie", **(metadata or {})}
+        if merchant_name: final_metadata["merchant_name"] = merchant_name
+        if descriptor: final_metadata["descriptor"] = descriptor
+        if payment_methods: final_metadata["payment_methods"] = payment_methods
+
+        if use_qr:
+            result = await self.create_qr_payment(
+                amount=amount,
+                description=checkout_desc,
+                external_id=final_external_id,
+                payment_methods=payment_methods,
+                merchant_name=merchant_name,
+                descriptor=descriptor,
+            )
+        else:
+            result = await self.create_checkout(
+                amount=amount,
+                description=checkout_desc,
+                descriptor=descriptor,
+                merchant_name=merchant_name,
+                customer_name=customer_name,
+                customer_email=customer_email,
+                external_id=final_external_id,
+                payment_methods=payment_methods,
+                metadata=final_metadata,
+            )
+
+        if not result.get("success"):
+            return result
+
+        # Return normalized data for internal use
+        return {
+            "success": True,
+            "transaction_type": transaction_type,
+            "amount": amount,
+            "external_id": result.get("external_id", final_external_id),
+            "gateway_id": str(result.get("checkout_id", "") or result.get("qr_id", "")),
+            "payment_url": str(result.get("checkout_url", "") or result.get("qr_content", "")),
+            "payment_methods": payment_methods,
+            "merchant_name": merchant_name,
+            "descriptor": descriptor,
+            "applied_description": checkout_desc,
+            "raw": result,
+        }
+
 
 async def run_card_settlement_sweep() -> None:
     # TODO: remove once Magpie migration is confirmed stable (added 2026-07)
