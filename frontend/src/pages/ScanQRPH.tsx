@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   Camera, Upload, QrCode, Loader2, CheckCircle, AlertCircle,
-  ScanLine, X, RefreshCw, Send,
+  ScanLine, X, RefreshCw, Send, ShieldCheck, Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
@@ -81,7 +81,7 @@ function parseQRPH(raw: string): QRPHData | null {
 
 // ---------- Component ----------
 export default function ScanQRPH() {
-  const { user } = useAuth();
+  useAuth();
   const [mode, setMode] = useState<'idle' | 'camera' | 'upload'>('idle');
   const [scanning, setScanning] = useState(false);
   const [qrData, setQrData] = useState<QRPHData | null>(null);
