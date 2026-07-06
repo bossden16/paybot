@@ -53,7 +53,8 @@ async def test_magpie_service_checkout_and_qr(monkeypatch):
         DummyResp(200, json.dumps(qr_data), qr_data),
     ]
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda *args, **kwargs: SeqClient(responses))
+    client_instance = SeqClient(responses)
+    monkeypatch.setattr("httpx.AsyncClient", lambda *args, **kwargs: client_instance)
 
     svc = MagpieService()
     svc.api_key = "test"
@@ -69,9 +70,10 @@ async def test_magpie_service_checkout_and_qr(monkeypatch):
 
 def test_legacy_checkout_session_route(monkeypatch):
     # Mock MagpieService.create_session to return a session
-    async def fake_create_session(self, payload):
-        return {"success": True, "session_id": "s_1", "payment_url": "https://magpie/pay/s_1", "external_id": payload.get("external_id")}
+    async def fake_create_session(self, **kwargs):
+        return {"success": True, "session_id": "s_1", "payment_url": "https://magpie/pay/s_1", "external_id": kwargs.get("external_id")}
 
+    import services.magpie_service
     monkeypatch.setattr(services.magpie_service.MagpieService, "create_session", fake_create_session)
 
     # Mock TransactionsService.create_transaction to avoid DB access
@@ -82,7 +84,8 @@ def test_legacy_checkout_session_route(monkeypatch):
     async def fake_create_transaction(self, **kwargs):
         return DummyTxn()
 
-    monkeypatch.setattr(transactions_module.TransactionsService, "create_transaction", fake_create_transaction)
+    import services.transactions
+    monkeypatch.setattr(services.transactions.TransactionsService, "create_transaction", fake_create_transaction)
 
     payload = {
         "amount": 150.0,

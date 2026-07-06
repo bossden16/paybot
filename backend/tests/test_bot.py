@@ -995,11 +995,11 @@ class TestXenditCollectionFallback:
                 "external_id": "maya-external-456",
             }
 
-        with patch("routers.xendit.XenditService.create_invoice", new=fake_xendit_create_invoice), patch(
+        with patch("routers.xend._create_checkout_transaction", new=fake_xendit_create_invoice), patch(
             "services.magpie_service.MagpieService.create_checkout", new=fake_magpie_create_checkout
         ):
             r = client.post(
-                "/api/v1/xendit/create-invoice",
+                "/api/v1/xend/create-invoice",
                 headers=auth_headers,
                 json={
                     "amount": 120.0,

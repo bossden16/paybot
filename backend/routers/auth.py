@@ -290,42 +290,11 @@ async def telegram_login_widget(payload: TelegramWidgetLoginRequest, request: Re
     in_db = db_admin is not None and db_admin.is_active
 
     if not in_db and not in_env:
-        # Auto-signup: Create AdminUser if not found (accurate user records)
-        if not db_admin:
-            try:
-                display_name = " ".join(part for part in [payload.first_name, payload.last_name] if part).strip()
-                if not display_name:
-                    display_name = payload.username or telegram_user_id
-
-                db_admin = AdminUser(
-                    telegram_id=telegram_user_id,
-                    telegram_username=payload.username,
-                    name=display_name,
-                    is_active=True,
-                    is_super_admin=False,
-                    can_manage_payments=True,
-                    can_manage_disbursements=True,
-                    can_view_reports=True,
-                    can_manage_wallet=True,
-                    can_manage_transactions=True,
-                    can_manage_bot=False,
-                    can_approve_topups=False,
-                    added_by="telegram_widget_auto_signup",
-                )
-                db.add(db_admin)
-                await db.commit()
-                await db.refresh(db_admin)
-                in_db = True
-                logger.info("[telegram-login-widget] Auto-signed up user: %s", telegram_user_id)
-            except Exception as e:
-                logger.error("[telegram-login-widget] Auto-signup failed: %s", e)
-                await db.rollback()
-
-        if not in_db:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not authorized to access the admin dashboard.",
-            )
+        # Respect TELEGRAM_ADMIN_IDS whitelist: unknown users are denied access.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access the admin dashboard.",
+        )
 
     valid, reason = _verify_telegram_widget_payload(payload, bot_token)
     if not valid:

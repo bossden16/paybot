@@ -28,6 +28,9 @@ async def check_database_health() -> bool:
 
 async def initialize_database():
     """Initialize database and create tables"""
+    # Ensure all models are registered with SQLAlchemy metadata
+    import models.all
+
     if "MGX_IGNORE_INIT_DB" in os.environ:
         logger.info("Ignore creating tables")
         return

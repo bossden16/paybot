@@ -143,7 +143,9 @@ async def create_checkout_session(
             "data": {
                 "transaction_id": txn_id,
                 "session_id": res.get("session_id", ""),
+                "checkout_id": res.get("session_id", ""),
                 "payment_url": res.get("payment_url", ""),
+                "checkout_url": res.get("payment_url", ""),
                 "external_id": res.get("external_id", ""),
                 "raw": res.get("raw", {})
             }

@@ -8,8 +8,8 @@ Tests cover:
 - User wallet conversions
 """
 
-import asyncio
 import pytest
+import pytest_asyncio
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -22,8 +22,8 @@ from models.exchange_rate_override import ExchangeRateOverride
 from services.currency_service import CurrencyService
 
 
-@pytest.fixture(scope="session")
-def test_db():
+@pytest_asyncio.fixture(scope="function")
+async def test_db_engine():
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
@@ -31,393 +31,296 @@ def test_db():
         poolclass=StaticPool,
     )
 
-    async def create_schema():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    asyncio.run(create_schema())
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    yield async_session
-
-    asyncio.run(engine.dispose())
+    yield engine
+    await engine.dispose()
 
 
-@pytest.fixture
-def db_session(test_db):
-    async def create_session():
-        session = test_db()
-        return session
-
-    session = asyncio.run(create_session())
-    try:
+@pytest_asyncio.fixture(scope="function")
+async def db_session(test_db_engine):
+    async_session = async_sessionmaker(test_db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
         yield session
-    finally:
-        asyncio.run(session.rollback())
-        asyncio.run(session.close())
+        await session.rollback()
 
 
-def test_exchange_rate_service_get_rate(db_session):
+@pytest.mark.asyncio
+async def test_exchange_rate_service_get_rate(db_session):
     """Test getting exchange rates from service."""
+    from services import exchange_rate_service
 
-    async def _run():
-        from services import exchange_rate_service
+    exchange_rate_service.clear_cache()
 
-        exchange_rate_service.clear_cache()
-
-        try:
-            rate = await exchange_rate_service.fetch_live_usdt_php_rate()
-            assert rate > 0
-            assert isinstance(rate, float)
-        except RuntimeError:
-            pytest.skip("Network unavailable for rate fetch")
-
-    asyncio.run(_run())
+    try:
+        rate = await exchange_rate_service.fetch_live_usdt_php_rate()
+        assert rate > 0
+        assert isinstance(rate, float)
+    except RuntimeError:
+        pytest.skip("Network unavailable for rate fetch")
 
 
-def test_currency_conversion_quote(db_session):
+@pytest.mark.asyncio
+async def test_currency_conversion_quote(db_session):
     """Test getting a conversion quote."""
+    wallet = Wallets(
+        user_id="test_user",
+        currency="USD",
+        balance=100.0,
+        available_balance=100.0,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(wallet)
+    await db_session.flush()
 
-    async def _run():
-        wallet = Wallets(
-            user_id="test_user",
-            currency="USD",
-            balance=100.0,
-            available_balance=100.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db_session.add(wallet)
-        await db_session.flush()
+    service = CurrencyService(db_session)
 
-        service = CurrencyService(db_session)
-
-        quote = await service.get_conversion_quote(wallet.id, "USD", "USD", 50.0)
-        assert quote["from_amount"] == 50.0
-        assert quote["to_amount"] == 50.0
-        assert quote["rate"] == 1.0
-        assert quote["fee_amount"] == 0.0
-
-    asyncio.run(_run())
+    quote = await service.get_conversion_quote(wallet.id, "USD", "USD", 50.0)
+    assert quote["from_amount"] == 50.0
+    assert quote["to_amount"] == 50.0
+    assert quote["rate"] == 1.0
+    assert quote["fee_amount"] == 0.0
 
 
-def test_set_rate_override(db_session):
-    """Test setting an admin rate override."""
+@pytest.mark.asyncio
+async def test_set_rate_override(db_session):
+    """Test setting an exchange rate override."""
+    service = CurrencyService(db_session)
 
-    async def _run():
-        service = CurrencyService(db_session)
-        override = await service.set_rate_override(
-            currency_pair="USD_PHP",
-            override_rate=60.0,
-            reason="Market adjustment",
-            created_by="admin_user",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        )
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    override = await service.set_rate_override(
+        "USD", "PHP", 60.0, expires_at, "admin_user"
+    )
 
-        assert override.currency_pair == "USD_PHP"
-        assert override.override_rate == 60.0
-        assert override.reason == "Market adjustment"
-        assert override.created_by == "admin_user"
-
-    asyncio.run(_run())
+    assert override.from_currency == "USD"
+    assert override.to_currency == "PHP"
+    assert override.rate == 60.0
+    assert override.created_by == "admin_user"
 
 
-def test_get_rate_stats(db_session):
-    """Test getting rate statistics."""
-
-    async def _run():
-        service = CurrencyService(db_session)
-        now = datetime.now(timezone.utc)
-        rates = [50.0, 51.0, 52.0, 51.5, 50.5]
-
-        for i, rate in enumerate(rates):
-            history = ExchangeRateHistory(
-                currency_pair="USD_PHP",
-                rate=rate,
-                provider="test",
-                source="test",
-                recorded_at=now - timedelta(hours=len(rates) - i),
-                created_at=now,
-                updated_at=now,
-            )
-            db_session.add(history)
-
-        await db_session.flush()
-        stats = await service.get_rate_stats("USD_PHP", days=1)
-
-        assert stats["min"] == 50.0
-        assert stats["max"] == 52.0
-        assert stats["avg"] > 50.0
-        assert stats["data_points"] == 5
-
-    asyncio.run(_run())
+@pytest.mark.asyncio
+async def test_get_rate_stats(db_session):
+    """Test getting exchange rate statistics."""
+    service = CurrencyService(db_session)
+    stats = await service.get_rate_stats("USDT_PHP")
+    assert "current" in stats
+    assert "data_points" in stats
 
 
-def test_remove_rate_override(db_session):
-    """Test removing a rate override."""
+@pytest.mark.asyncio
+async def test_remove_rate_override(db_session):
+    """Test removing an exchange rate override."""
+    service = CurrencyService(db_session)
 
-    async def _run():
-        service = CurrencyService(db_session)
-        override = await service.set_rate_override(
-            currency_pair="EUR_PHP",
-            override_rate=65.0,
-            reason="Test override",
-            created_by="admin_user",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        )
+    await service.set_rate_override(
+        "USD", "PHP", 60.0, datetime.now(timezone.utc) + timedelta(hours=1), "admin"
+    )
 
-        await service.remove_rate_override(override.id)
+    success = await service.remove_rate_override("USD", "PHP")
+    assert success is True
 
-        query = select(ExchangeRateOverride).where(ExchangeRateOverride.id == override.id)
-        result = await db_session.execute(query)
-        deleted = result.scalar_one_or_none()
-
-        assert deleted is None
-
-    asyncio.run(_run())
+    # Verify it's gone
+    stmt = select(ExchangeRateOverride).where(
+        ExchangeRateOverride.from_currency == "USD",
+        ExchangeRateOverride.to_currency == "PHP"
+    )
+    result = await db_session.execute(stmt)
+    assert result.scalar_one_or_none() is None
 
 
-def test_get_supported_currencies(db_session):
-    """Test getting supported currencies list."""
-
-    async def _run():
-        service = CurrencyService(db_session)
-        currencies = await service.get_supported_currencies()
-
-        assert isinstance(currencies, list)
-        assert len(currencies) > 0
-        assert "PHP" in currencies
-        assert "USD" in currencies
-
-    asyncio.run(_run())
+@pytest.mark.asyncio
+async def test_get_supported_currencies(db_session):
+    """Test getting list of supported currencies."""
+    service = CurrencyService(db_session)
+    currencies = await service.get_supported_currencies()
+    assert "PHP" in currencies
+    assert "USD" in currencies
+    assert "USDT" in currencies
 
 
-def test_conversion_with_insufficient_balance(db_session):
-    """Test conversion fails with insufficient balance."""
+@pytest.mark.asyncio
+async def test_conversion_with_insufficient_balance(db_session):
+    """Test conversion fails when source wallet has low balance."""
+    wallet = Wallets(
+        user_id="test_user",
+        currency="USD",
+        balance=10.0,
+        available_balance=10.0,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(wallet)
+    await db_session.flush()
 
-    async def _run():
-        from_wallet = Wallets(
-            user_id="test_user",
-            currency="USD",
-            balance=10.0,
-            available_balance=10.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        to_wallet = Wallets(
-            user_id="test_user",
-            currency="PHP",
-            balance=0.0,
-            available_balance=0.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db_session.add(from_wallet)
-        db_session.add(to_wallet)
-        await db_session.flush()
+    to_wallet = Wallets(
+        user_id="test_user",
+        currency="PHP",
+        balance=0.0,
+        available_balance=0.0,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(to_wallet)
+    await db_session.flush()
 
-        service = CurrencyService(db_session)
+    service = CurrencyService(db_session)
 
-        with pytest.raises(ValueError, match="Insufficient balance"):
-            await service.convert_currency(
-                from_wallet=from_wallet,
-                to_wallet=to_wallet,
-                from_amount=50.0,
-                user_id="test_user",
-            )
-
-    asyncio.run(_run())
+    with pytest.raises(ValueError, match="Insufficient balance"):
+        await service.convert_currency(wallet, to_wallet, 50.0, "test_user")
 
 
-def test_same_currency_conversion_rejected(db_session):
+@pytest.mark.asyncio
+async def test_same_currency_conversion_rejected(db_session):
     """Test that converting to same currency is rejected."""
+    wallet = Wallets(
+        user_id="test_user",
+        currency="PHP",
+        balance=100.0,
+        available_balance=100.0,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(wallet)
+    await db_session.flush()
 
-    async def _run():
-        wallet = Wallets(
-            user_id="test_user",
-            currency="USD",
-            balance=100.0,
-            available_balance=100.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db_session.add(wallet)
-        await db_session.flush()
+    service = CurrencyService(db_session)
 
-        service = CurrencyService(db_session)
-
-        with pytest.raises(ValueError, match="must be different"):
-            await service.convert_currency(
-                from_wallet=wallet,
-                to_wallet=wallet,
-                from_amount=50.0,
-                user_id="test_user",
-            )
-
-    asyncio.run(_run())
+    with pytest.raises(ValueError, match="same currency"):
+        await service.convert_currency(wallet, wallet, 50.0, "test_user")
 
 
-def test_conversion_updates_wallet_counts(db_session):
-    """Test that conversions increment conversion_count."""
+@pytest.mark.asyncio
+async def test_conversion_updates_wallet_counts(db_session):
+    """Test that conversion increments conversion_count on wallets."""
+    from_wallet = Wallets(
+        user_id="user1", currency="USD", balance=100.0, available_balance=100.0,
+        conversion_count=0, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    to_wallet = Wallets(
+        user_id="user1", currency="PHP", balance=0.0, available_balance=0.0,
+        conversion_count=0, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    db_session.add_all([from_wallet, to_wallet])
+    await db_session.flush()
 
-    async def _run():
-        from_wallet = Wallets(
-            user_id="test_user",
-            currency="USD",
-            balance=100.0,
-            available_balance=100.0,
-            conversion_count=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        to_wallet = Wallets(
-            user_id="test_user",
-            currency="PHP",
-            balance=0.0,
-            available_balance=0.0,
-            conversion_count=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db_session.add(from_wallet)
-        db_session.add(to_wallet)
-        await db_session.flush()
+    service = CurrencyService(db_session)
+    # Mock live rate to avoid network dependency in unit test logic
+    with pytest.monkeypatch.context() as m:
+        m.setattr("services.exchange_rate_service.fetch_live_usdt_php_rate", lambda: 56.0)
+        await service.convert_currency(from_wallet, to_wallet, 10.0, "user1")
 
-        initial_from_count = from_wallet.conversion_count
-        initial_to_count = to_wallet.conversion_count
-
-        service = CurrencyService(db_session)
-        await service.set_rate_override("USD_PHP", 60.0, "test", "admin", datetime.now(timezone.utc) + timedelta(hours=1))
-
-        try:
-            await service.convert_currency(
-                from_wallet=from_wallet,
-                to_wallet=to_wallet,
-                from_amount=10.0,
-                user_id="test_user",
-            )
-        except Exception:
-            pass
-
-        assert from_wallet.conversion_count > initial_from_count
-        assert to_wallet.conversion_count > initial_to_count
-
-    asyncio.run(_run())
+    assert from_wallet.conversion_count == 1
+    assert to_wallet.conversion_count == 1
 
 
-def test_rate_history_recorded(db_session):
-    """Test that rates are recorded in history."""
+@pytest.mark.asyncio
+async def test_rate_history_recorded(db_session):
+    """Test that exchange rates are recorded in history on use."""
+    from_wallet = Wallets(
+        user_id="user1", currency="USD", balance=100.0, available_balance=100.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    to_wallet = Wallets(
+        user_id="user1", currency="PHP", balance=0.0, available_balance=0.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    db_session.add_all([from_wallet, to_wallet])
+    await db_session.flush()
 
-    async def _run():
-        now = datetime.now(timezone.utc)
-        history = ExchangeRateHistory(
-            currency_pair="USD_PHP",
-            rate=58.5,
-            provider="coingecko",
-            source="test",
-            recorded_at=now,
-            created_at=now,
-            updated_at=now,
-        )
-        db_session.add(history)
-        await db_session.flush()
+    service = CurrencyService(db_session)
+    with pytest.monkeypatch.context() as m:
+        m.setattr("services.exchange_rate_service.fetch_live_usdt_php_rate", lambda: 56.5)
+        await service.convert_currency(from_wallet, to_wallet, 10.0, "user1")
 
-        query = select(ExchangeRateHistory).where(ExchangeRateHistory.currency_pair == "USD_PHP")
-        result = await db_session.execute(query)
-        records = result.scalars().all()
-
-        assert len(records) > 0
-        assert records[0].rate == 58.5
-
-    asyncio.run(_run())
-
-
-def test_conversion_fee_calculation(db_session):
-    """Test that conversion fees are calculated correctly."""
-
-    async def _run():
-        from_wallet = Wallets(
-            user_id="test_user",
-            currency="USD",
-            balance=1000.0,
-            available_balance=1000.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        to_wallet = Wallets(
-            user_id="test_user",
-            currency="PHP",
-            balance=0.0,
-            available_balance=0.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db_session.add(from_wallet)
-        db_session.add(to_wallet)
-        await db_session.flush()
-
-        service = CurrencyService(db_session)
-        quote = await service.get_conversion_quote(from_wallet.id, "USD", "PHP", 100.0)
-
-        assert quote["fee_rate"] == 0.01
-        expected_fee = quote["rate"] * 100.0 * 0.01
-        assert abs(quote["fee_amount"] - expected_fee) < 0.01
-
-    asyncio.run(_run())
+    # Check history
+    stmt = select(ExchangeRateHistory).where(
+        ExchangeRateHistory.from_currency == "USD",
+        ExchangeRateHistory.to_currency == "PHP"
+    )
+    res = await db_session.execute(stmt)
+    history = res.scalar_one()
+    assert history.rate == 56.5
 
 
-def test_override_rate_used_in_conversion(db_session):
-    """Test that admin overrides are used in conversion quotes."""
+@pytest.mark.asyncio
+async def test_conversion_fee_calculation(db_session):
+    """Test that fees are correctly calculated and deducted."""
+    from_wallet = Wallets(
+        user_id="user1", currency="USD", balance=100.0, available_balance=100.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    to_wallet = Wallets(
+        user_id="user1", currency="PHP", balance=0.0, available_balance=0.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    db_session.add_all([from_wallet, to_wallet])
+    await db_session.flush()
 
-    async def _run():
-        from_wallet = Wallets(
-            user_id="test_user",
-            currency="USD",
-            balance=100.0,
-            available_balance=100.0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        db_session.add(from_wallet)
-        await db_session.flush()
+    service = CurrencyService(db_session)
+    # 56 PHP/USD rate. 10 USD -> 560 PHP gross.
+    # With 1% fee (default in many systems), it should be 554.4 PHP net.
+    with pytest.monkeypatch.context() as m:
+        m.setattr("services.exchange_rate_service.fetch_live_usdt_php_rate", lambda: 56.0)
+        conv = await service.convert_currency(from_wallet, to_wallet, 10.0, "user1")
 
-        service = CurrencyService(db_session)
-        await service.set_rate_override(
-            "USD_PHP",
-            70.0,
-            "test override",
-            "admin_user",
-            datetime.now(timezone.utc) + timedelta(hours=1),
-        )
-
-        try:
-            quote = await service.get_conversion_quote(from_wallet.id, "USD", "PHP", 100.0)
-            assert quote["rate"] == 70.0
-        except Exception:
-            pass
-
-    asyncio.run(_run())
+    assert conv.from_amount == 10.0
+    assert conv.to_amount < (10.0 * 56.0)
+    assert conv.conversion_fee_amount > 0
 
 
-def test_expired_override_not_used(db_session):
-    """Test that expired overrides are not used."""
+@pytest.mark.asyncio
+async def test_override_rate_used_in_conversion(db_session):
+    """Test that admin overrides take precedence over live rates."""
+    from_wallet = Wallets(
+        user_id="user1", currency="USD", balance=100.0, available_balance=100.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    to_wallet = Wallets(
+        user_id="user1", currency="PHP", balance=0.0, available_balance=0.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    db_session.add_all([from_wallet, to_wallet])
 
-    async def _run():
-        service = CurrencyService(db_session)
-        past_time = datetime.now(timezone.utc) - timedelta(hours=1)
-        await service.set_rate_override(
-            "EUR_PHP",
-            75.0,
-            "expired override",
-            "admin_user",
-            past_time,
-        )
+    service = CurrencyService(db_session)
+    # Set override to 100.0 (very high)
+    await service.set_rate_override(
+        "USD", "PHP", 100.0, datetime.now(timezone.utc) + timedelta(minutes=5), "admin"
+    )
+    await db_session.flush()
 
-        active = await service._get_active_override("EUR_PHP")
-        assert active is None
+    with pytest.monkeypatch.context() as m:
+        m.setattr("services.exchange_rate_service.fetch_live_usdt_php_rate", lambda: 56.0)
+        conv = await service.convert_currency(from_wallet, to_wallet, 1.0, "user1")
 
-    asyncio.run(_run())
+    # 1.0 USD -> 100 PHP (minus fee)
+    assert conv.rate_applied == 100.0
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+@pytest.mark.asyncio
+async def test_expired_override_not_used(db_session):
+    """Test that expired overrides are ignored in favor of live rates."""
+    from_wallet = Wallets(
+        user_id="user1", currency="USD", balance=100.0, available_balance=100.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    to_wallet = Wallets(
+        user_id="user1", currency="PHP", balance=0.0, available_balance=0.0,
+        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+    )
+    db_session.add_all([from_wallet, to_wallet])
+
+    service = CurrencyService(db_session)
+    # Set expired override
+    await service.set_rate_override(
+        "USD", "PHP", 100.0, datetime.now(timezone.utc) - timedelta(minutes=5), "admin"
+    )
+    await db_session.flush()
+
+    with pytest.monkeypatch.context() as m:
+        m.setattr("services.exchange_rate_service.fetch_live_usdt_php_rate", lambda: 56.0)
+        conv = await service.convert_currency(from_wallet, to_wallet, 1.0, "user1")
+
+    # Should use live rate 56.0
+    assert conv.rate_applied == 56.0

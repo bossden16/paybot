@@ -244,9 +244,35 @@ class CurrencyService:
 
         return override
 
-    async def remove_rate_override(self, override_id: int) -> None:
-        """Remove a rate override by ID.
+    async def remove_rate_override(
+        self, from_currency: str, to_currency: str
+    ) -> bool:
+        """Remove a rate override for a currency pair.
         
+        Args:
+            from_currency: Source currency
+            to_currency: Target currency
+
+        Returns:
+            bool: True if removed, False if not found
+        """
+        pair = f"{from_currency}_{to_currency}"
+        query = select(ExchangeRateOverride).where(
+            ExchangeRateOverride.currency_pair == pair
+        )
+        result = await self.db.execute(query)
+        override = result.scalar_one_or_none()
+
+        if not override:
+            return False
+
+        await self.db.delete(override)
+        logger.info(f"Removed rate override for {pair}")
+        return True
+
+    async def remove_rate_override_by_id(self, override_id: int) -> None:
+        """Remove a rate override by ID.
+
         Args:
             override_id: Override record ID
         """

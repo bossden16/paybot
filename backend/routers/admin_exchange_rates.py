@@ -177,7 +177,7 @@ async def delete_rate_override(
     service = CurrencyService(db)
 
     try:
-        await service.remove_rate_override(override_id)
+        await service.remove_rate_override_by_id(override_id)
         await db.commit()
         logger.info(f"Admin {current_user.user_id} removed rate override {override_id}")
     except ValueError as e:

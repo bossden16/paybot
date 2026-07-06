@@ -519,7 +519,15 @@ class WalletsService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_list(self, skip: int = 0, limit: int = 20, user_id: Optional[str] = None, currency: Optional[str] = None) -> Dict[str, Any]:
+    async def get_list(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        user_id: Optional[str] = None,
+        currency: Optional[str] = None,
+        query_dict: Optional[Dict[str, Any]] = None,
+        sort: Optional[str] = None
+    ) -> Dict[str, Any]:
         query = select(Wallets)
         count_query = select(func.count(Wallets.id))
 
@@ -529,14 +537,104 @@ class WalletsService:
         if currency:
             query = query.where(Wallets.currency == currency.upper())
             count_query = count_query.where(Wallets.currency == currency.upper())
-            
+
+        if query_dict:
+            for field, value in query_dict.items():
+                if hasattr(Wallets, field):
+                    query = query.where(getattr(Wallets, field) == value)
+                    count_query = count_query.where(getattr(Wallets, field) == value)
+
+        if sort:
+            if sort.startswith('-'):
+                field_name = sort[1:]
+                if hasattr(Wallets, field_name):
+                    query = query.order_by(getattr(Wallets, field_name).desc(), Wallets.id.desc())
+            else:
+                if hasattr(Wallets, sort):
+                    query = query.order_by(getattr(Wallets, sort), Wallets.id.asc())
+        else:
+            query = query.order_by(Wallets.id.desc())
+
         count_result = await self.db.execute(count_query)
         total = count_result.scalar()
 
-        result = await self.db.execute(query.order_by(Wallets.updated_at.desc()).offset(skip).limit(limit))
+        result = await self.db.execute(query.offset(skip).limit(limit))
         items = result.scalars().all()
 
-        return {"items": items, "total": total}
+        return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+    async def create(self, data: Dict[str, Any], user_id: Optional[str] = None) -> Optional[Wallets]:
+        """Create a new wallet"""
+        try:
+            if user_id:
+                data['user_id'] = user_id
+            if 'created_at' not in data or data['created_at'] is None:
+                data['created_at'] = datetime.now(timezone.utc)
+            if 'updated_at' not in data or data['updated_at'] is None:
+                data['updated_at'] = datetime.now(timezone.utc)
+            obj = Wallets(**data)
+            self.db.add(obj)
+            await self.db.commit()
+            await self.db.refresh(obj)
+            return obj
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error creating wallet: {str(e)}")
+            raise
+
+    async def bulk_create(self, items: List[Dict[str, Any]], user_id: Optional[str] = None) -> List[Wallets]:
+        """Bulk-create multiple wallets"""
+        try:
+            objs = []
+            for data in items:
+                if user_id:
+                    data = {**data, 'user_id': user_id}
+                if 'created_at' not in data or data['created_at'] is None:
+                    data['created_at'] = datetime.now(timezone.utc)
+                if 'updated_at' not in data or data['updated_at'] is None:
+                    data['updated_at'] = datetime.now(timezone.utc)
+                objs.append(Wallets(**data))
+            self.db.add_all(objs)
+            await self.db.commit()
+            for obj in objs:
+                await self.db.refresh(obj)
+            return objs
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error bulk creating wallets: {str(e)}")
+            raise
+
+    async def update(self, obj_id: int, update_data: Dict[str, Any], user_id: Optional[str] = None) -> Optional[Wallets]:
+        """Update wallet"""
+        try:
+            obj = await self.get_by_id(obj_id, user_id=user_id)
+            if not obj:
+                return None
+            for key, value in update_data.items():
+                if hasattr(obj, key) and key != 'user_id':
+                    setattr(obj, key, value)
+            obj.updated_at = datetime.now(timezone.utc)
+            await self.db.commit()
+            await self.db.refresh(obj)
+            return obj
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error updating wallet {obj_id}: {str(e)}")
+            raise
+
+    async def delete(self, obj_id: int, user_id: Optional[str] = None) -> bool:
+        """Delete wallet"""
+        try:
+            obj = await self.get_by_id(obj_id, user_id=user_id)
+            if not obj:
+                return False
+            await self.db.delete(obj)
+            await self.db.commit()
+            return True
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting wallet {obj_id}: {str(e)}")
+            raise
 
     async def get_admin_username(self, wallet_user_id: str) -> Optional[str]:
         tg_id = wallet_user_id[3:] if wallet_user_id.startswith("tg-") else wallet_user_id
