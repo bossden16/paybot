@@ -50,8 +50,6 @@ import QRCodesPage from './pages/QRCodesPage';
 
 const queryClient = new QueryClient();
 
-const queryClient = new QueryClient();
-
 // Paths that should remain accessible even during maintenance
 const MAINTENANCE_EXEMPT_PATHS = ['/home', '/intro', '/login', '/register', '/features', '/pricing', '/auth/callback', '/auth/error', '/logout-callback', '/maintenance', '/checkout'];
 
