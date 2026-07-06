@@ -1,5 +1,5 @@
 # Explicitly import all models to ensure they are registered with Base.metadata
-from models.auth import User
+from models.auth import User, OIDCState
 from models.admin_users import AdminUser
 from models.api_configs import Api_configs
 from models.app_settings import AppSettings
@@ -18,7 +18,7 @@ from models.kyb_registrations import KybRegistration
 from models.kyc_verifications import KycVerification
 from models.refunds import Refunds
 from models.subscriptions import Subscriptions
-from models.team_invitations import TeamInvitation
+from models.team_invitations import TeamInvitation, AdminRole
 from models.topup_requests import TopupRequest
 from models.transactions import Transactions
 from models.usdt_send_requests import UsdtSendRequest

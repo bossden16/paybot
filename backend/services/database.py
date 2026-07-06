@@ -28,15 +28,20 @@ async def check_database_health() -> bool:
 
 async def initialize_database():
     """Initialize database and create tables"""
-    # Ensure all models are registered with SQLAlchemy metadata
-    import models.all
-
     if "MGX_IGNORE_INIT_DB" in os.environ:
         logger.info("Ignore creating tables")
         return
     start_time = time.time()
     logger.debug("[DB_OP] Starting database initialization")
     try:
+        # Ensure all models are registered with SQLAlchemy metadata
+        try:
+            import models.all
+            logger.info("🔧 All models registered successfully")
+        except ImportError as e:
+            logger.error(f"❌ Failed to import all models: {e}")
+            # Continue anyway, some tables might still be created or already exist
+
         logger.info("🔧 Starting database initialization...")
         await db_manager.init_db()
         logger.info("🔧 Database connection initialized, now creating tables if tables not exist...")

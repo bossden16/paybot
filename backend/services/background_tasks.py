@@ -70,6 +70,18 @@ class BackgroundTasksService:
     async def start_worker(self):
         """Main worker loop for automated operations."""
         logger.info("Background Worker initialized. Starting automation loops...")
+
+        # Wait for database initialization
+        max_waits = 30
+        while not db_manager.async_session_maker and max_waits > 0:
+            logger.info("Background Worker: Waiting for database session maker...")
+            await asyncio.sleep(2)
+            max_waits -= 1
+
+        if not db_manager.async_session_maker:
+            logger.error("Background Worker: Database session maker not available after waiting. Shutting down worker.")
+            return
+
         while True:
             try:
                 # Run sync every 10 minutes
