@@ -193,6 +193,38 @@ const BASE_URL = '/api/v1';
 
 const PAYMENTS_ENDPOINTS: Endpoint[] = [
   {
+    method: 'POST', path: `${BASE_URL}/magpie/checkout/sessions`,
+    summary: 'Create checkout session',
+    description: 'Creates a Magpie Checkout Session. This is the recommended way to initiate a hosted payment flow.',
+    auth: 'api_key', scopes: ['payments:write'],
+    bodyParams: [
+      { name: 'amount', type: 'number', description: 'Total amount in PHP' },
+      { name: 'line_items', type: 'array', description: 'List of items. If amount is not provided, total is calculated from these (item amounts in cents).' },
+      { name: 'payment_methods', type: 'array', description: 'List of supported methods (e.g. visa, mastercard, gcash, maya)' },
+      { name: 'success_url', type: 'string', required: true, description: 'Where to redirect after payment success' },
+      { name: 'cancel_url', type: 'string', description: 'Where to redirect if payment is cancelled' },
+      { name: 'external_id', type: 'string', description: 'Your unique reference ID' },
+    ],
+    requestExample: `{
+  "amount": 500.00,
+  "description": "Premium Subscription",
+  "payment_methods": ["visa", "mastercard", "gcash"],
+  "success_url": "https://yourdomain.com/success",
+  "line_items": [
+    { "name": "Premium Month", "amount": 50000, "quantity": 1 }
+  ]
+}`,
+    responseExample: `{
+  "success": true,
+  "data": {
+    "session_id": "cs_test_a1b2c3",
+    "payment_url": "https://checkout.magpie.im/cs_test_a1b2c3",
+    "external_id": "magpie-session-7d8e9f",
+    "transaction_id": 1045
+  }
+}`,
+  },
+  {
     method: 'POST', path: `${BASE_URL}/xend/invoice`,
     summary: 'Create invoice',
     description: 'Creates a hosted checkout invoice and returns a payment URL. The customer is redirected to the checkout page.',

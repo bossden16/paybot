@@ -21,9 +21,18 @@ This document lists the steps and artifacts required to request Magpie to whitel
 
 3. Sample payloads and headers to include in the request to Magpie support:
    - Example create QR payload: {"amount":111.0, "description":"magpie payment", "external_id":"xend-qr-...", "payment_methods":["qrph"]}
+   - Example Checkout Session payload: {"amount":500.0, "currency":"php", "payment_methods":["visa", "mastercard"], "line_items":[{"name":"Product A", "amount":50000, "quantity":1}]}
    - Example webhook signature header: `X-Magpie-Signature: <hexdigest>` (HMAC-SHA256 of raw body using `MAGPIE_WEBHOOK_SECRET`).
 
-4. Contact template (email to Magpie support):
+4. Developer Integration Guide:
+   - **Service Layer**: All Magpie interactions are encapsulated in `backend/services/magpie_service.py`.
+   - **Checkout Sessions**: Use `MagpieService.create_session()`. It handles:
+     - Automatic amount calculation from `line_items` (values in cents).
+     - Fallback to legacy checkout if the Sessions API is unavailable.
+     - Response normalization for consistent UI handling.
+   - **Webhook Verification**: HMAC signature verification is implemented in `backend/routers/magpie_webhook.py`.
+
+5. Contact template (email to Magpie support):
 
 Subject: Request to whitelist platform: <your-platform-name>
 

@@ -414,29 +414,106 @@ class MagpieService:
             return result
         return self._normalize_qr_response(result.get("data", {}), external_id)
 
-    async def create_session(self, *, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_session(
+        self,
+        *,
+        amount: Optional[float] = None,
+        currency: str = "php",
+        external_id: Optional[str] = None,
+        description: str = "",
+        payment_methods: Optional[List[str]] = None,
+        line_items: Optional[List[Dict[str, Any]]] = None,
+        success_url: str = "",
+        cancel_url: str = "",
+        customer_email: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+        mode: str = "payment",
+    ) -> Dict[str, Any]:
         """Create a hosted checkout session (Magpie Checkout Sessions API).
 
-        Accepts a payload matching Magpie's Checkout Sessions shape and returns
-        a normalized session response containing `session_id` and `payment_url`.
+        Handles amount calculation from line_items and falls back to legacy checkout
+        if the sessions API fails.
         """
-        result = await self._post("/v1/checkout/sessions", payload)
-        if not result.get("success"):
-            return result
-        data = result.get("data", {})
-        if not isinstance(data, dict):
-            return {"success": False, "error": f"Unexpected response format from Magpie: {type(data).__name__}"}
+        # 1. Resolve amount from line_items if not provided
+        if amount is None and line_items:
+            try:
+                total_cents = 0
+                for item in line_items:
+                    qty = int(float(item.get("quantity") or 1))
+                    item_amount = int(float(item.get("amount") or 0))
+                    total_cents += item_amount * qty
+                amount = float(total_cents) / 100.0
+            except Exception as e:
+                logger.warning("Failed to calculate session amount from line_items: %s", e)
+                return {"success": False, "error": "Invalid line_items format"}
 
-        # Normalize common session fields
-        session_id = self._pick(data, "id", "session_id", "checkout_id") or ""
-        payment_url = self._pick(data, "payment_url", "checkout_url", "url") or ""
-        external_id = self._pick(data, "external_id", "reference", "reference_id") or payload.get("external_id", "")
+        if amount is None or amount <= 0:
+            return {"success": False, "error": "Amount must be provided and > 0"}
+
+        # 2. Prepare payload
+        final_external_id = external_id or f"magpie-session-{uuid.uuid4().hex[:12]}"
+        payload: Dict[str, Any] = {
+            "amount": amount,
+            "currency": currency.lower(),
+            "external_id": final_external_id,
+            "mode": mode,
+            "description": description,
+        }
+
+        if payment_methods:
+            # Magpie sometimes expects both keys for compatibility
+            payload["payment_methods"] = payment_methods
+            payload["payment_method_types"] = payment_methods
+        if line_items:
+            payload["line_items"] = line_items
+        if success_url:
+            payload["success_url"] = success_url
+        if cancel_url:
+            payload["cancel_url"] = cancel_url
+        if customer_email:
+            payload["customer_email"] = customer_email
+        if metadata:
+            payload["metadata"] = metadata
+
+        # 3. Attempt to create session
+        result = await self._post("/v1/checkout/sessions", payload, idempotency_key=final_external_id)
+
+        if result.get("success"):
+            data = result.get("data", {})
+            if isinstance(data, dict):
+                session_id = self._pick(data, "id", "session_id", "checkout_id") or ""
+                payment_url = self._pick(data, "payment_url", "checkout_url", "url") or ""
+                return {
+                    "success": True,
+                    "session_id": str(session_id),
+                    "payment_url": str(payment_url),
+                    "external_id": str(self._pick(data, "external_id") or final_external_id),
+                    "raw": data,
+                }
+
+        # 4. Fallback to legacy checkout
+        logger.warning("Magpie sessions API failed, falling back to legacy checkout: %s", result.get("error"))
+        fallback = await self.create_checkout(
+            amount=amount,
+            description=description or "Checkout session",
+            external_id=final_external_id,
+            customer_email=customer_email,
+            payment_methods=payment_methods,
+            metadata={
+                **(metadata or {}),
+                "source": "magpie_legacy_session_fallback",
+            },
+        )
+
+        if not fallback.get("success"):
+            return fallback
+
         return {
             "success": True,
-            "session_id": str(session_id),
-            "payment_url": str(payment_url),
-            "external_id": str(external_id),
-            "raw": data,
+            "session_id": fallback.get("checkout_id", ""),
+            "payment_url": fallback.get("checkout_url", ""),
+            "external_id": fallback.get("external_id", final_external_id),
+            "raw": fallback.get("raw", {}),
         }
 
 
