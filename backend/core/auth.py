@@ -111,7 +111,13 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         raise AccessTokenError("Authentication service is misconfigured")
 
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        # Add 10 seconds of leeway for clock skew between containers
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+            options={"leeway": 10}
+        )
         # Log user hash instead of actual user ID to avoid exposing sensitive information
         user_id = payload.get("sub", "unknown")
         user_hash = hashlib.sha256(str(user_id).encode()).hexdigest()[:8] if user_id != "unknown" else "unknown"

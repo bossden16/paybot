@@ -92,7 +92,7 @@ class TransactionsService(BaseService[Transactions]):
         # Logic for Automated Clearing:
         # Instant methods (QR, E-Wallet) go to available_balance (T+0)
         # Card payments often require T+1 clearing.
-        is_instant = txn.transaction_type in ["qr_code", "ewallet", "qrph_payment"]
+        is_instant = txn.transaction_type in ["qr_code", "ewallet", "qrph_payment", "zip_checkout"]
 
         if is_instant:
             wallet.available_balance += amount

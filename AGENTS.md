@@ -10,11 +10,11 @@ The POS Terminal system is now fully operational with bank-grade settlement infr
 - **Endpoints**: `/api/v1/pos-terminals`, `/api/v1/wallet`
 
 ### Active Tasks:
-1. **Monitoring**: Real-time transaction validation on Maya & Security Bank APIs.
-2. **Settlement**: Ultra T+0 priority routing enabled for verified nodes.
+1. **Monitoring**: Real-time transaction validation on Maya, Zip & Security Bank APIs.
+2. **Settlement**: Ultra T+0 priority routing enabled for verified nodes (including Zip BNPL).
 3. **Compliance**: Integrated BSP-regulated clearing channels for local payouts.
 4. **Public Access**: Mobile & Web platforms are live and secured with AES-256 encryption.
 
 ### Maintenance Notes:
-- Keep `MAYA_SECRET_KEY` and `SECURITY_BANK_API_KEY` updated.
+- Keep `MAYA_SECRET_KEY`, `ZIP_API_KEY`, and `SECURITY_BANK_API_KEY` updated.
 - Monitor `settlement-batch` logs for T+1 clearing accuracy.

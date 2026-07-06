@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     transfi_webhook_secret: str = ""
     transfi_base_url: str = ""         # override base URL (leave empty for default)
 
+    # Zip Payment API (zip.ph)
+    zip_api_key: str = ""
+    zip_base_url: str = "https://api.zip.ph"
+
     # Cloudflare Turnstile (server-side CAPTCHA verification)
     # Secret key from https://dash.cloudflare.com → Turnstile → your site → Secret Key
     # When set, every Telegram widget login must include a valid Turnstile token.
@@ -164,7 +168,7 @@ class Settings(BaseSettings):
     # JWT configuration
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 60
+    jwt_expire_minutes: int = 1440  # 24 hours (increased from 60 mins for better dashboard UX)
 
     @model_validator(mode="after")
     def strip_token_fields(self) -> "Settings":
@@ -178,6 +182,7 @@ class Settings(BaseSettings):
             "telegram_bot_username",
             "xendit_secret_key",
             "magpie_api_key",
+            "zip_api_key",
             "cloudflare_turnstile_secret_key",
             "jwt_secret_key",
         ):

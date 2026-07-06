@@ -9,7 +9,9 @@ from core.database import get_db
 from dependencies.auth import get_payment_user
 from schemas.auth import UserResponse
 from services.magpie_service import MagpieService
+from services.zip_service import ZipService
 from services.transactions import TransactionsService
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ PAYMENT_METHOD_ALIASES = {
     "pesonet": "pesonet",
     "qr": "qrph",
     "qrph": "qrph",
+    "zip": "zip",
 }
 
 SUPPORTED_PAYMENT_METHODS = sorted(set(PAYMENT_METHOD_ALIASES.values()))
@@ -139,23 +142,99 @@ async def _process_xend_request(
         )
 
     service = MagpieService()
-    try:
-        result = await service.create_unified_checkout(
-            amount=request.amount,
-            description=request.description,
-            transaction_type=transaction_type,
-            external_prefix=external_prefix,
-            use_qr=use_qr,
-            merchant_name=request.merchant_name,
-            descriptor=request.descriptor,
-            customer_name=request.customer_name,
-            customer_email=request.customer_email,
-            payment_methods=payment_methods,
-            external_id=request.external_id or None,
-        )
-    except Exception as exc:
-        logger.exception("Magpie payment creation failed")
-        return {"success": False, "message": "Payment creation failed", "error": str(exc)}
+    zip_svc = ZipService()
+
+    # Dispatch logic: Choose provider based on methods and health
+    use_zip = False
+    if "zip" in payment_methods:
+        use_zip = True
+    elif not service.api_key and zip_svc.api_key:
+        use_zip = True
+    # If only GCash/Maya/Card are requested and Magpie is having issues, Zip is a good alternative
+    elif zip_svc.api_key and any(m in ["gcash", "maya", "visa", "mastercard"] for m in payment_methods):
+        # We'll stay with Magpie for now unless Magpie fails,
+        # but the user can now force Zip by adding 'zip' to methods.
+        pass
+
+    if use_zip:
+        logger.info("Using ZipService for %s payment (amount=%.2f)", transaction_type, request.amount)
+        try:
+            # Map 'qrph' to Zip-compatible methods if needed
+            zip_methods = [m for m in payment_methods if m != "zip"]
+            if "qrph" in zip_methods:
+                zip_methods.remove("qrph")
+                if "gcash" not in zip_methods: zip_methods.append("gcash")
+                if "paymaya" not in zip_methods: zip_methods.append("paymaya")
+
+            res = await zip_svc.create_checkout(
+                amount=request.amount,
+                description=request.description or f"Zip payment ({transaction_type})",
+                external_id=request.external_id or f"{external_prefix}-{uuid.uuid4().hex[:12]}",
+                customer_email=request.customer_email,
+                payment_method_types=zip_methods or None
+            )
+            if res.get("success"):
+                result = {
+                    "success": True,
+                    "transaction_type": transaction_type,
+                    "amount": request.amount,
+                    "external_id": res.get("external_id"),
+                    "gateway_id": res.get("checkout_id"),
+                    "payment_url": res.get("checkout_url"),
+                    "source": "zip"
+                }
+            else:
+                return {"success": False, "message": res.get("error", "Zip checkout failed")}
+        except Exception as exc:
+            logger.exception("Zip payment creation failed")
+            return {"success": False, "message": "Zip payment creation failed", "error": str(exc)}
+    else:
+        logger.info("Using MagpieService for %s payment (amount=%.2f)", transaction_type, request.amount)
+        try:
+            result = await service.create_unified_checkout(
+                amount=request.amount,
+                description=request.description,
+                transaction_type=transaction_type,
+                external_prefix=external_prefix,
+                use_qr=use_qr,
+                merchant_name=request.merchant_name,
+                descriptor=request.descriptor,
+                customer_name=request.customer_name,
+                customer_email=request.customer_email,
+                payment_methods=payment_methods,
+                external_id=request.external_id or None,
+            )
+
+            # Automatic Failover to Zip if Magpie returns 500
+            if not result.get("success") and "500" in str(result.get("error", "")) and zip_svc.api_key:
+                logger.warning("Magpie returned 500, attempting automatic failover to Zip...")
+                # Map qrph to Zip-compatible methods
+                zip_methods = [m for m in payment_methods if m != "qrph"]
+                if "qrph" in payment_methods:
+                    if "gcash" not in zip_methods: zip_methods.append("gcash")
+                    if "paymaya" not in zip_methods: zip_methods.append("paymaya")
+
+                res = await zip_svc.create_checkout(
+                    amount=request.amount,
+                    description=request.description or f"Zip Fallback ({transaction_type})",
+                    external_id=request.external_id or f"{external_prefix}-failover-{uuid.uuid4().hex[:8]}",
+                    customer_email=request.customer_email,
+                    payment_method_types=zip_methods or None
+                )
+                if res.get("success"):
+                    logger.info("Automatic failover to Zip successful")
+                    result = {
+                        "success": True,
+                        "transaction_type": transaction_type,
+                        "amount": request.amount,
+                        "external_id": res.get("external_id"),
+                        "gateway_id": res.get("checkout_id"),
+                        "payment_url": res.get("checkout_url"),
+                        "source": "zip_failover"
+                    }
+        except Exception as exc:
+            logger.exception("Magpie payment creation failed")
+            return {"success": False, "message": "Payment creation failed", "error": str(exc)}
 
     if not result.get("success"):
         return {"success": False, "message": result.get("error", "Failed to create payment")}
