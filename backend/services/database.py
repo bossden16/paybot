@@ -26,6 +26,27 @@ async def check_database_health() -> bool:
         return False
 
 
+async def sync_database_sequences():
+    """Synchronize PostgreSQL sequences with table max IDs to prevent unique constraint violations."""
+    if "postgresql" not in str(db_manager.database_url).lower():
+        return
+
+    logger.info("🔧 Synchronizing database sequences...")
+    tables = ["transactions", "wallets", "wallet_transactions", "disbursements", "refunds", "subscriptions", "admin_users"]
+    async with db_manager.async_session_maker() as session:
+        for table in tables:
+            try:
+                # Check if table exists
+                await session.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
+                # Sync sequence
+                seq_name = f"{table}_id_seq"
+                await session.execute(text(f"SELECT setval('{seq_name}', COALESCE((SELECT MAX(id) FROM {table}), 1))"))
+                logger.info(f"✅ Synchronized sequence for {table}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not sync sequence for {table}: {e}")
+        await session.commit()
+
+
 async def initialize_database():
     """Initialize database and create tables"""
     if "MGX_IGNORE_INIT_DB" in os.environ:
@@ -47,6 +68,10 @@ async def initialize_database():
         logger.info("🔧 Database connection initialized, now creating tables if tables not exist...")
         await db_manager.create_tables()
         logger.info("🔧 Table creation completed")
+
+        # FIX: Synchronize sequences after table creation/initialization
+        await sync_database_sequences()
+
         logger.info("Database initialized successfully")
         logger.debug(f"[DB_OP] Database initialization completed in {time.time() - start_time:.4f}s")
     except Exception as e:

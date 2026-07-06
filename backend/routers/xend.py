@@ -159,19 +159,27 @@ async def _process_xend_request(
     if use_zip:
         logger.info("Using ZipService for %s payment (amount=%.2f)", transaction_type, request.amount)
         try:
-            # Map 'qrph' to Zip-compatible methods if needed
-            zip_methods = [m for m in payment_methods if m != "zip"]
-            if "qrph" in zip_methods:
-                zip_methods.remove("qrph")
-                if "gcash" not in zip_methods: zip_methods.append("gcash")
-                if "paymaya" not in zip_methods: zip_methods.append("paymaya")
+            # Zip-compatible method mapping
+            zip_methods = []
+            for m in payment_methods:
+                if m in ["visa", "mastercard", "jcb", "amex", "unionpay"]:
+                    if "card" not in zip_methods: zip_methods.append("card")
+                elif m in ["gcash", "maya", "grabpay"]:
+                    if m not in zip_methods: zip_methods.append(m)
+                elif m == "qrph":
+                    if "gcash" not in zip_methods: zip_methods.append("gcash")
+                    if "paymaya" not in zip_methods: zip_methods.append("paymaya")
+
+            # Default if nothing matched
+            if not zip_methods:
+                zip_methods = ["card", "gcash", "paymaya"]
 
             res = await zip_svc.create_checkout(
                 amount=request.amount,
                 description=request.description or f"Zip payment ({transaction_type})",
                 external_id=request.external_id or f"{external_prefix}-{uuid.uuid4().hex[:12]}",
                 customer_email=request.customer_email,
-                payment_method_types=zip_methods or None
+                payment_method_types=zip_methods
             )
             if res.get("success"):
                 result = {
@@ -208,18 +216,28 @@ async def _process_xend_request(
             # Automatic Failover to Zip if Magpie returns 500
             if not result.get("success") and "500" in str(result.get("error", "")) and zip_svc.api_key:
                 logger.warning("Magpie returned 500, attempting automatic failover to Zip...")
-                # Map qrph to Zip-compatible methods
-                zip_methods = [m for m in payment_methods if m != "qrph"]
-                if "qrph" in payment_methods:
-                    if "gcash" not in zip_methods: zip_methods.append("gcash")
-                    if "paymaya" not in zip_methods: zip_methods.append("paymaya")
+
+                # Zip-compatible method mapping
+                zip_methods = []
+                for m in payment_methods:
+                    if m in ["visa", "mastercard", "jcb", "amex", "unionpay"]:
+                        if "card" not in zip_methods: zip_methods.append("card")
+                    elif m in ["gcash", "maya", "grabpay"]:
+                        if m not in zip_methods: zip_methods.append(m)
+                    elif m == "qrph":
+                        if "gcash" not in zip_methods: zip_methods.append("gcash")
+                        if "paymaya" not in zip_methods: zip_methods.append("paymaya")
+
+                # Default to card/gcash/paymaya if nothing matched
+                if not zip_methods:
+                    zip_methods = ["card", "gcash", "paymaya"]
 
                 res = await zip_svc.create_checkout(
                     amount=request.amount,
                     description=request.description or f"Zip Fallback ({transaction_type})",
                     external_id=request.external_id or f"{external_prefix}-failover-{uuid.uuid4().hex[:8]}",
                     customer_email=request.customer_email,
-                    payment_method_types=zip_methods or None
+                    payment_method_types=zip_methods
                 )
                 if res.get("success"):
                     logger.info("Automatic failover to Zip successful")
