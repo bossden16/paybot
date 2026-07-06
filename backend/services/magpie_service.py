@@ -150,8 +150,11 @@ class MagpieService:
         payment_methods: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        # Magpie expects amount in cents (integer)
+        amount_cents = int(round(amount * 100))
+
         payload: Dict[str, Any] = {
-            "amount": amount,
+            "amount": amount_cents,
             "description": description,
             "external_id": external_id,
             "currency": "php",
@@ -175,11 +178,15 @@ class MagpieService:
         if not result.get("success"):
             # Some Magpie accounts or environments reject the legacy checkout
             # endpoint with a 500 while the newer checkout-session endpoint works.
+            # Newer Sessions API also expects cents.
             session_payload = {
                 **payload,
-                "amount": float(payload.get("amount", 0) or 0),
-                "currency": payload.get("currency", "php"),
+                "amount": amount_cents,
+                "currency": payload.get("currency", "php").lower(),
                 "external_id": external_id,
+                "mode": "payment",
+                "success_url": f"{settings.backend_url}/magpie-success",
+                "cancel_url": f"{settings.backend_url}/magpie-cancel",
             }
             session_result = await self._post("/v1/checkout/sessions", session_payload, idempotency_key=idempotency_key)
             if not session_result.get("success"):
@@ -246,7 +253,7 @@ class MagpieService:
         result = await self._post(
             "/v1/payments/ewallet",
             {
-                "amount": amount,
+                "amount": int(round(amount * 100)),
                 "channel_code": channel_code,
                 "mobile_number": mobile_number,
                 "external_id": external_id,
@@ -268,7 +275,7 @@ class MagpieService:
             "/v1/payments/refunds",
             {
                 "invoice_id": invoice_id,
-                "amount": amount,
+                "amount": int(round(amount * 100)),
             },
         )
         if not result.get("success"):
@@ -305,7 +312,7 @@ class MagpieService:
         result = await self._post(
             "/v1/payments/terminal",
             {
-                "amount": amount,
+                "amount": int(round(amount * 100)),
                 "description": description,
                 "terminal_id": terminal_id,
                 "external_id": external_id,
@@ -332,7 +339,7 @@ class MagpieService:
         result = await self._post(
             "/v1/payments/card",
             {
-                "amount": amount,
+                "amount": int(round(amount * 100)),
                 "description": description,
                 "customer_name": customer_name,
                 "customer_email": customer_email,
@@ -358,7 +365,7 @@ class MagpieService:
         result = await self._post(
             "/v1/payouts",
             {
-                "amount": amount,
+                "amount": int(round(amount * 100)),
                 "bank_code": bank_code,
                 "account_number": account_number,
                 "account_name": account_name,
@@ -401,7 +408,7 @@ class MagpieService:
         descriptor: str = "",
     ) -> Dict[str, Any]:
         payload = {
-            "amount": amount,
+            "amount": int(round(amount * 100)),
             "description": description,
             "external_id": external_id,
             "payment_methods": payment_methods or ["qrph"],
@@ -453,7 +460,7 @@ class MagpieService:
         # 2. Prepare payload
         final_external_id = external_id or f"magpie-session-{uuid.uuid4().hex[:12]}"
         payload: Dict[str, Any] = {
-            "amount": amount,
+            "amount": int(round(amount * 100)),
             "currency": currency.lower(),
             "external_id": final_external_id,
             "mode": mode,
@@ -466,10 +473,14 @@ class MagpieService:
             payload["payment_method_types"] = payment_methods
         if line_items:
             payload["line_items"] = line_items
-        if success_url:
-            payload["success_url"] = success_url
-        if cancel_url:
-            payload["cancel_url"] = cancel_url
+        if not success_url:
+            success_url = f"{settings.backend_url}/magpie-success"
+        if not cancel_url:
+            cancel_url = f"{settings.backend_url}/magpie-cancel"
+
+        payload["success_url"] = success_url
+        payload["cancel_url"] = cancel_url
+
         if customer_email:
             payload["customer_email"] = customer_email
         if metadata:
