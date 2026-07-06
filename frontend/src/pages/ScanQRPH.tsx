@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -81,7 +82,15 @@ function parseQRPH(raw: string): QRPHData | null {
 
 // ---------- Component ----------
 export default function ScanQRPH() {
-  useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/login', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
+
   const [mode, setMode] = useState<'idle' | 'camera' | 'upload'>('idle');
   const [scanning, setScanning] = useState(false);
   const [qrData, setQrData] = useState<QRPHData | null>(null);
@@ -218,8 +227,10 @@ export default function ScanQRPH() {
       } else {
         toast.error(res.data?.message || 'Payment failed');
       }
-    } catch (err: unknown) {
-      toast.error((err as { data?: { detail?: string } })?.data?.detail || 'Payment failed');
+    } catch (err) {
+      const error = err as any;
+      const message = error?.data?.detail || error?.message || 'Payment failed';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -320,12 +331,12 @@ export default function ScanQRPH() {
             <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500" />
             <CardHeader className="pb-4">
               <CardTitle className="text-foreground text-lg flex items-center justify-between">
-                <span className="flex items-center gap-2.5 font-black tracking-tight">
+                <div className="flex items-center gap-2.5 font-black tracking-tight">
                   <div className="h-8 w-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
                     <ShieldCheck className="h-5 w-5 text-blue-400" />
                   </div>
                   Payment Details
-                </span>
+                </div>
                 <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground rounded-full" onClick={reset}>
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rescan
                 </Button>
@@ -434,7 +445,7 @@ export default function ScanQRPH() {
             </CardHeader>
             <CardContent className="space-y-3">
               {Object.entries(result).map(([key, value]) => {
-                if (!value || key === 'success') return null;
+                if (value === null || value === undefined || key === 'success') return null;
                 return (
                   <div key={key} className="space-y-0.5">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider">{key.replace(/_/g, ' ')}</p>

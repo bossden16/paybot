@@ -254,14 +254,15 @@ export default function Login() {
       const u = await resolveBotUsername();
       if (!u) { setLocalError('Telegram sign-in is not configured. Please set TELEGRAM_BOT_USERNAME.'); return; }
       if (turnstileSiteKey && !turnstileToken) return;
-      if (!widgetContainerRef.current) return;
+      const container = widgetContainerRef.current;
+      if (!container) return;
       setLocalError(null);
       window.onTelegramAuth = async (tgUser: TelegramWidgetUser) => {
         setSubmitting(true); setLocalError(null);
         await loginWithTelegram(tgUser, turnstileToken ?? undefined);
         setSubmitting(false);
       };
-      widgetContainerRef.current.innerHTML = '';
+      container.innerHTML = '';
       const s = document.createElement('script');
       s.async = true;
       s.src = 'https://telegram.org/js/telegram-widget.js?22';
@@ -270,12 +271,13 @@ export default function Login() {
       s.setAttribute('data-userpic', 'false');
       s.setAttribute('data-onauth', 'onTelegramAuth(user)');
       s.setAttribute('data-request-access', 'write');
-      widgetContainerRef.current.appendChild(s);
+      container.appendChild(s);
     };
     renderWidget();
     return () => {
       canceled = true;
-      if (widgetContainerRef.current) widgetContainerRef.current.innerHTML = '';
+      const container = widgetContainerRef.current;
+      if (container) container.innerHTML = '';
       delete window.onTelegramAuth;
     };
   }, [botUsername, loginWithTelegram, turnstileToken, turnstileSiteKey]);

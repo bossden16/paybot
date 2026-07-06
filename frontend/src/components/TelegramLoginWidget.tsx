@@ -41,13 +41,14 @@ export default function TelegramLoginWidget({
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
     script.async = true;
 
-    if (containerRef.current) {
-      containerRef.current.appendChild(script);
+    const container = containerRef.current;
+    if (container) {
+      container.appendChild(script);
     }
 
     return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
+      if (container) {
+        container.innerHTML = '';
       }
       delete window.onTelegramAuth;
     };

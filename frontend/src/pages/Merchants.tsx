@@ -30,7 +30,7 @@ export default function Merchants() {
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>(null);
 
-  const fetchMerchants = async (q = query, p = page, sField: string | null = sortField, sDir: 'asc' | 'desc' | null = sortDir) => {
+  const fetchMerchants = useCallback(async (q = query, p = page, sField: string | null = sortField, sDir: 'asc' | 'desc' | null = sortDir) => {
     setLoading(true);
     try {
       const url = new URL('/api/v1/merchants', window.location.origin);
@@ -54,7 +54,7 @@ export default function Merchants() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query, page, sortField, sortDir, perPage]);
 
   const handleSort = (field: string) => {
     let nextDir: 'asc' | 'desc' = 'asc';
@@ -66,7 +66,9 @@ export default function Merchants() {
     fetchMerchants(query, 1, field, nextDir);
   };
 
-  useEffect(() => { fetchMerchants(); /* eslint-disable-next-line */ }, [page]);
+  useEffect(() => {
+    fetchMerchants();
+  }, [fetchMerchants]);
 
   const handleSearch = () => { setPage(1); fetchMerchants(query, 1); };
 
