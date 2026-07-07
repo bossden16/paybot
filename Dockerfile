@@ -1,7 +1,6 @@
 # ── Stage 1: Build the React frontend ───────────────────────────────────────
-# Default backend base image must provide a POSIX shell and package manager
-# (Debian slim) because the Dockerfile installs apt packages in the backend stage.
-ARG PY_BASE_IMAGE=python:3.11-slim
+# Use AWS ECR Public mirror for the base image to avoid Render's Docker Hub mirror 403 errors.
+ARG PY_BASE_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
 FROM cgr.dev/chainguard/node:latest-dev AS frontend-builder
 
 USER root
@@ -28,9 +27,8 @@ COPY frontend/ .
 RUN pnpm build
 
 # ── Stage 2: Python backend ──────────────────────────────────────────────────
-## Use a Chainguard Python base image to avoid Docker Hub and anonymous mirror token issues.
-## This is configurable so CI can override the exact image if needed.
-ARG PY_BASE_IMAGE=cgr.dev/chainguard/python:latest
+## Use the same Python base image from AWS ECR Public mirror to avoid 403 Forbidden errors.
+ARG PY_BASE_IMAGE
 FROM ${PY_BASE_IMAGE}
 
 WORKDIR /app/backend
