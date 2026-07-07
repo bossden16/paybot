@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from datetime import datetime
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from pydantic import ConfigDict, BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -101,3 +101,18 @@ entity_router = BaseEntityRouter(
 )
 
 router = entity_router.router
+
+
+@router.get("/public/{external_id}", response_model=TransactionsResponse)
+async def get_public_transaction(
+    external_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public transaction lookup by external_id or gateway ID for hosted checkout pages.
+    """
+    service = TransactionsService(db)
+    result = await service.find_by_external_or_gateway_id(external_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return result

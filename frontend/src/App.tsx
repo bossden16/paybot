@@ -157,7 +157,7 @@ function AuthAwareShell() {
             <Route path="/policies" element={<Policies />} />
             <Route path="/compliance" element={<Compliance />} />
             <Route path="/magpie-success" element={<MagpieSuccess />} />
-            <Route path="/checkout/:externalId" element={<Checkout />} />
+            <Route path="/checkout/:identifier" element={<Checkout />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PageFade>

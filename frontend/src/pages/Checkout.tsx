@@ -38,38 +38,35 @@ interface Transaction {
 }
 
 export default function Checkout() {
-  const { externalId } = useParams<{ externalId: string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const [txn, setTxn] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchTransaction() {
-      if (!externalId) return;
+      if (!identifier) return;
       try {
         setLoading(true);
-        // We use a public endpoint if available, otherwise fallback to standard query
-        // Since we don't have a specific public 'get by external_id' endpoint in the prompt context,
-        // we'll assume we can query the transactions entity or use a specialized route.
-        const res = await client.entities.transactions.query({
-          query: { external_id: externalId },
-          limit: 1
+        const res = await client.apiCall.invoke({
+          url: `/api/v1/entities/transactions/public/${encodeURIComponent(identifier)}`,
+          method: 'GET',
         });
 
-        if (res.data?.items && res.data.items.length > 0) {
-          setTxn(res.data.items[0] as Transaction);
+        if (res.data) {
+          setTxn(res.data as Transaction);
         } else {
           setError('Transaction not found');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Checkout fetch error:', err);
-        setError('Failed to load payment details');
+        setError(err?.response?.data?.detail || 'Failed to load payment details');
       } finally {
         setLoading(false);
       }
     }
     fetchTransaction();
-  }, [externalId]);
+  }, [identifier]);
 
   if (loading) return <AppLoadingScreen />;
 
@@ -91,6 +88,8 @@ export default function Checkout() {
   const isPaid = txn.status === 'paid';
   const isExpired = txn.status === 'expired' || txn.status === 'cancelled';
   const isPending = txn.status === 'pending';
+  const hasCheckoutLink = Boolean(txn.payment_url);
+  const hasQR = Boolean(txn.qr_code_url);
 
   return (
     <div className="min-h-screen bg-[#080E1A] text-white selection:bg-blue-500/30">
@@ -165,7 +164,7 @@ export default function Checkout() {
               <div className="space-y-4">
                 <p className="text-sm font-medium text-slate-400 px-1">Complete your payment using:</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {txn.payment_url && (
+                  {hasCheckoutLink && (
                     <a href={txn.payment_url} target="_blank" rel="noopener noreferrer" className="group">
                       <div className="h-full rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 transition-all hover:bg-blue-600/10 hover:border-blue-500/40">
                         <div className="flex items-center gap-4">
@@ -174,34 +173,53 @@ export default function Checkout() {
                           </div>
                           <div className="flex-1">
                             <p className="font-bold text-white">Direct Payment</p>
-                            <p className="text-[11px] text-slate-500">Cards, E-Wallets, Bank Transfer</p>
+                            <p className="text-[11px] text-slate-500">Open the secure checkout page</p>
                           </div>
                           <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-blue-400 transition-colors" />
                         </div>
                       </div>
                     </a>
                   )}
-                  {txn.qr_code_url && (
-                    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 cursor-pointer hover:bg-purple-600/10 hover:border-purple-500/40 transition-all group">
+                  {hasQR && (
+                    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 group">
                       <div className="flex items-center gap-4">
                         <div className="h-10 w-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
                           <QrCode className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
                           <p className="font-bold text-white">QR Code</p>
-                          <p className="text-[11px] text-slate-500">Scan via any QRPH App</p>
+                          <p className="text-[11px] text-slate-500">Scan with a QRPH-capable wallet</p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-purple-400 transition-colors" />
+                      </div>
+                      <div className="mt-4 rounded-2xl border border-white/[0.08] bg-slate-900/20 p-4 text-center">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(txn.qr_code_url)}`}
+                          alt="Checkout QR Code"
+                          className="mx-auto h-40 w-40"
+                        />
                       </div>
                     </div>
                   )}
                 </div>
 
-                <Button asChild size="lg" className="w-full h-14 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 font-bold text-lg shadow-xl shadow-blue-600/20">
-                  <a href={txn.payment_url || "#"} target="_blank" rel="noopener noreferrer">
-                    Pay Now <ArrowRight className="h-5 w-5 ml-2" />
-                  </a>
-                </Button>
+                {hasCheckoutLink ? (
+                  <Button asChild size="lg" className="w-full h-14 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 font-bold text-lg shadow-xl shadow-blue-600/20">
+                    <a href={txn.payment_url} target="_blank" rel="noopener noreferrer">
+                      Pay Now <ArrowRight className="h-5 w-5 ml-2" />
+                    </a>
+                  </Button>
+                ) : hasQR ? (
+                  <Button asChild size="lg" className="w-full h-14 rounded-2xl bg-purple-600 text-white hover:bg-purple-500 font-bold text-lg shadow-xl shadow-purple-600/20">
+                    <a href={txn.qr_code_url} target="_blank" rel="noopener noreferrer">
+                      Open QR Checkout <ArrowRight className="h-5 w-5 ml-2" />
+                    </a>
+                  </Button>
+                ) : (
+                  <div className="rounded-2xl border border-slate-700 bg-white/[0.02] p-6 text-center text-sm text-slate-400">
+                    No active checkout URL or QR code is available for this transaction.
+                  </div>
+                )}
               </div>
             )}
 
