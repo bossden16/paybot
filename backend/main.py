@@ -25,6 +25,19 @@ logger = logging.getLogger("xend.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("BOOT: Application lifespan starting...")
+
+    # Debug: Check static assets
+    try:
+        if _STATIC.exists():
+            contents = os.listdir(_STATIC)
+            logger.info(f"BOOT: Static directory found at {_STATIC}. Contents: {contents}")
+            if "index.html" not in contents:
+                logger.error("BOOT: index.html MISSING in static directory!")
+        else:
+            logger.error(f"BOOT: Static directory NOT FOUND at {_STATIC}")
+    except Exception as e:
+        logger.error(f"BOOT: Error checking static assets: {e}")
+
     try:
         # Initialize Core Services
         await initialize_database()
