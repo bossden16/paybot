@@ -86,3 +86,4 @@ merchant_private_pkcs8.pem
 merchant_public.pem
 private_key_env.txt
 paybot-pos-terminal-live.apk
+# NOTE: sensitive files removed from repo on 2026-07-07 — rotate exposed keys immediately
