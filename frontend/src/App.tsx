@@ -21,6 +21,8 @@ const ReportsPage = React.lazy(() => import('./pages/ReportsPage'));
 const BotSettings = React.lazy(() => import('./pages/BotSettings'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const MessengerPage = React.lazy(() => import('./pages/MessengerPage'));
+const DeveloperExperience = React.lazy(() => import('./pages/DeveloperExperience'));
+const ApiDocsPage = React.lazy(() => import('./pages/ApiDocsPage'));
 const AdminManagement = React.lazy(() => import('./pages/AdminManagement'));
 const BotMessagesPage = React.lazy(() => import('./pages/BotMessagesPage'));
 const TopupRequestsPage = React.lazy(() => import('./pages/TopupRequestsPage'));
