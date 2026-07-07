@@ -1,4 +1,5 @@
 # ── Stage 1: Build the React frontend ───────────────────────────────────────
+ARG PY_BASE_IMAGE=cgr.dev/chainguard/python:latest
 FROM cgr.dev/chainguard/node:latest-dev AS frontend-builder
 
 USER root
