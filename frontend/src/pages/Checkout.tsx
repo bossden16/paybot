@@ -85,11 +85,11 @@ export default function Checkout() {
     );
   }
 
-  const isPaid = txn.status === 'paid';
-  const isExpired = txn.status === 'expired' || txn.status === 'cancelled';
-  const isPending = txn.status === 'pending';
-  const hasCheckoutLink = Boolean(txn.payment_url);
-  const hasQR = Boolean(txn.qr_code_url);
+  const isPaid = txn?.status === 'paid';
+  const isExpired = txn?.status === 'expired' || txn?.status === 'cancelled';
+  const isPending = txn?.status === 'pending';
+  const hasCheckoutLink = Boolean(txn?.payment_url);
+  const hasQR = Boolean(txn?.qr_code_url);
 
   return (
     <div className="min-h-screen bg-[#080E1A] text-white selection:bg-blue-500/30">

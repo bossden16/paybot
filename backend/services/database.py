@@ -71,7 +71,10 @@ async def initialize_database():
         logger.info("🔧 Table creation completed")
 
         # FIX: Synchronize sequences after table creation/initialization
-        await sync_database_sequences()
+        try:
+            await sync_database_sequences()
+        except Exception as e:
+            logger.warning(f"🔧 Sequence synchronization skipped or failed: {e}")
 
         logger.info("Database initialized successfully")
         logger.debug(f"[DB_OP] Database initialization completed in {time.time() - start_time:.4f}s")

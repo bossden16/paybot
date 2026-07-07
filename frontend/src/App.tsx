@@ -55,7 +55,6 @@ const MAINTENANCE_EXEMPT_PATHS = ['/home', '/intro', '/login', '/register', '/fe
 
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [checked, setChecked] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -65,14 +64,10 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
         setMaintenanceMode(!!data.maintenance_mode);
       })
       .catch((err) => {
-        // If the check fails, don't block access — log for debugging
         console.warn('Maintenance mode check failed:', err);
         setMaintenanceMode(false);
-      })
-      .finally(() => setChecked(true));
+      });
   }, [location.pathname]);
-
-  if (!checked) return null;
 
   const isExempt = MAINTENANCE_EXEMPT_PATHS.some((p) => location.pathname === p || location.pathname.startsWith(p + '/'));
 
