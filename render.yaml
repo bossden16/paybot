@@ -8,7 +8,7 @@ services:
     plan: starter
     repo: https://github.com/PayBot-PH/paybot
     branch: main
-    dockerfilePath: backend/Dockerfile
+    dockerfilePath: Dockerfile
     autoDeploy: true
     instances: 1
     healthCheckPath: /health
@@ -53,7 +53,7 @@ jobs:
     plan: starter
     repo: https://github.com/PayBot-PH/paybot
     branch: main
-    dockerfilePath: backend/Dockerfile
+    dockerfilePath: Dockerfile
     command: alembic -c backend/alembic.ini upgrade head
     envVars:
       - key: DATABASE_URL
