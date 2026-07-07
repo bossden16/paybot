@@ -1,5 +1,7 @@
 # ── Stage 1: Build the React frontend ───────────────────────────────────────
-ARG PY_BASE_IMAGE=cgr.dev/chainguard/python:latest
+# Default backend base image must provide a POSIX shell and package manager
+# (Debian slim) because the Dockerfile installs apt packages in the backend stage.
+ARG PY_BASE_IMAGE=python:3.11-slim
 FROM cgr.dev/chainguard/node:latest-dev AS frontend-builder
 
 USER root
