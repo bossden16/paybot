@@ -607,27 +607,62 @@ class DatabaseManager:
         if self.async_session_maker is not None:
             return
 
-        # Use lock to prevent concurrent initialization attempts in the same Lambda execution environment
+        # Use lock to prevent concurrent initialization attempts
         async with self._init_lock:
-            # Double-check after acquiring lock (another request might have initialized it while we waited)
+            # Double-check after acquiring lock
             if self.async_session_maker is not None:
                 return
 
-            logger.warning("Database not initialized, attempting lazy initialization...")
-
-        # Release lock before calling init_db() because:
-        # 1. init_db() will try to acquire the same _init_lock internally (line 93), which would cause deadlock
-        # 2. Note: init_db() has a bug - its lock is released after the check (line 96),
-        #    so the actual initialization code (lines 98-146) is not protected by lock.
-        #    This is a pre-existing issue, not introduced by this change.
-        # 3. The double-checked locking pattern above ensures only one request proceeds to initialization
-        try:
-            await self.init_db()
+            logger.warning("Database not initialized, performing initialization...")
+            # Internal call to init_db would deadlock here if it tried to re-acquire the lock.
+            # We perform the initialization directly or call a private method.
+            await self._perform_initialization()
             await self.create_tables()
-            logger.info("Lazy database initialization completed successfully")
+            logger.info("Database initialization completed successfully")
+
+    async def _perform_initialization(self):
+        """Internal initialization logic without locking (caller must hold lock)"""
+        if not settings.database_url:
+            raise ValueError("DATABASE_URL environment variable is required")
+
+        try:
+            logger.info("Normalizing database URL for async compatibility...")
+            database_url = self._normalize_async_database_url(settings.database_url)
+
+            logger.info("Creating async database engine...")
+            engine_kwargs = {"echo": settings.debug}
+
+            pg_connect_args = self._get_pg_connect_args(database_url)
+            if pg_connect_args:
+                engine_kwargs["connect_args"] = pg_connect_args
+
+            # Connection pooling configuration
+            is_lambda = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("IS_LAMBDA", "").lower() in ("true", "1", "yes"))
+            is_sqlite = "sqlite" in database_url.lower()
+
+            if is_lambda:
+                engine_kwargs["poolclass"] = NullPool
+            elif not is_sqlite:
+                engine_kwargs["pool_pre_ping"] = True
+                engine_kwargs["pool_size"] = 5
+                engine_kwargs["max_overflow"] = 5
+                engine_kwargs["pool_recycle"] = 1800
+                engine_kwargs["pool_timeout"] = 30
+
+            self.engine = create_async_engine(database_url, **engine_kwargs)
+            self.async_session_maker = async_sessionmaker(self.engine, class_=AsyncSession, expire_on_commit=False)
         except Exception as e:
-            logger.error(f"Failed to lazy initialize database: {e}", exc_info=True)
+            self.engine = None
+            self.async_session_maker = None
+            logger.error(f"Failed to perform database initialization: {e}", exc_info=True)
             raise
+
+    async def init_db(self):
+        """Initialize database connection with thread safety"""
+        async with self._init_lock:
+            if self.engine is not None and self.async_session_maker is not None:
+                return
+            await self._perform_initialization()
 
 
 db_manager = DatabaseManager()

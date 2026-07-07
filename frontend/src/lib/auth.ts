@@ -20,12 +20,18 @@ export const authApi = {
       const token = getStoredToken();
       if (!token) return null;
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch('/api/v1/auth/me', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         return null;
