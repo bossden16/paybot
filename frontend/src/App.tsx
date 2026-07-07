@@ -45,8 +45,10 @@ import BotIntro from './pages/BotIntro';
 import ScanQRPH from './pages/ScanQRPH';
 import HomePage from './pages/Index';
 import MagpieSuccess from './pages/MagpieSuccess';
-import Checkout from './pages/Checkout';
-import QRCodesPage from './pages/QRCodesPage';
+
+// Lazy load new / heavy pages to ensure core app boots even if bundles are slow or broken
+const Checkout = React.lazy(() => import('./pages/Checkout'));
+const QRCodesPage = React.lazy(() => import('./pages/QRCodesPage'));
 
 const queryClient = new QueryClient();
 
@@ -132,7 +134,7 @@ function AuthAwareShell() {
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/payments" element={<CreatePayment />} />
             <Route path="/create-payment" element={<CreatePayment />} />
-            <Route path="/qr-codes" element={<QRCodesPage />} />
+            <Route path="/qr-codes" element={<React.Suspense fallback={<AppLoadingScreen />}><QRCodesPage /></React.Suspense>} />
             <Route path="/scan-qrph" element={<ScanQRPH />} />
             <Route path="/disbursements" element={<DisbursementsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
@@ -152,7 +154,7 @@ function AuthAwareShell() {
             <Route path="/policies" element={<Policies />} />
             <Route path="/compliance" element={<Compliance />} />
             <Route path="/magpie-success" element={<MagpieSuccess />} />
-            <Route path="/checkout/:identifier" element={<Checkout />} />
+            <Route path="/checkout/:identifier" element={<React.Suspense fallback={<AppLoadingScreen />}><Checkout /></React.Suspense>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PageFade>

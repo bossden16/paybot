@@ -26,20 +26,27 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
-);
-
 // Dismiss the pre-React HTML loader once React has painted its first frame.
-const htmlLoader = document.getElementById('html-loader');
-if (htmlLoader) {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      htmlLoader.style.transition = 'opacity 0.25s ease';
-      htmlLoader.style.opacity = '0';
-      setTimeout(() => htmlLoader.remove(), 280);
-    });
-  });
+function removeLoader() {
+  const htmlLoader = document.getElementById('html-loader');
+  if (htmlLoader) {
+    htmlLoader.style.transition = 'opacity 0.25s ease';
+    htmlLoader.style.opacity = '0';
+    setTimeout(() => htmlLoader.remove(), 280);
+  }
+}
+
+// Ensure loader is removed even if React fails to mount
+setTimeout(removeLoader, 3000);
+
+try {
+  createRoot(document.getElementById('root')!).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+  requestAnimationFrame(() => requestAnimationFrame(removeLoader));
+} catch (e) {
+  console.error('Failed to mount React:', e);
+  removeLoader();
 }
