@@ -49,13 +49,17 @@ export const authApi = {
     }
   },
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, cfTurnstileToken?: string) {
     const response = await fetch('/api/v1/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email,
+        password,
+        ...(cfTurnstileToken ? { cf_turnstile_token: cfTurnstileToken } : {}),
+      }),
     });
 
     if (!response.ok) {

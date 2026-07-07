@@ -1,0 +1,10 @@
+{
+  "routes": [],
+  "call": {
+    "status_code": 200,
+    "json": {
+      "status": "ok"
+    }
+  },
+  "exception": null
+}

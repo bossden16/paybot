@@ -35,7 +35,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (userId?: string, password?: string) => Promise<void>;
+  login: (email?: string, password?: string, cfTurnstileToken?: string) => Promise<void>;
   loginWithTelegram: (user: TelegramWidgetUser, cfTurnstileToken?: string | null) => Promise<void>;
   logout: () => Promise<void>;
   refetch: () => Promise<void>;
@@ -76,21 +76,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const login = useCallback(async (userId?: string, password?: string) => {
-    try {
-      setError(null);
+  const login = useCallback(
+    async (email?: string, password?: string, cfTurnstileToken?: string) => {
+      try {
+        setError(null);
 
-      if (!userId || !password) {
-        window.location.href = '/login';
-        return;
+        if (!email || !password) {
+          window.location.href = '/login';
+          return;
+        }
+
+        await authApi.login(email, password, cfTurnstileToken);
+        await checkAuthStatus();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Login failed');
       }
-
-      await authApi.login(userId, password);
-      await checkAuthStatus();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
-    }
-  }, [checkAuthStatus]);
+    },
+    [checkAuthStatus]
+  );
 
   const loginWithTelegram = useCallback(async (telegramUser: TelegramWidgetUser, cfTurnstileToken?: string | null) => {
     try {
@@ -114,21 +117,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuthStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkAuthStatus]);
 
-  const value: AuthContextType = {
-    user,
-    loading,
-    error,
-    login,
-    loginWithTelegram,
-    logout,
-    refetch: checkAuthStatus,
-    isAdmin: user?.role === 'admin',
-    isSuperAdmin: user?.permissions?.is_super_admin ?? false,
-    permissions: user?.permissions ?? null,
-  };
+  const value = useMemo(
+    (): AuthContextType => ({
+      user,
+      loading,
+      error,
+      login,
+      loginWithTelegram,
+      logout,
+      refetch: checkAuthStatus,
+      isAdmin: user?.role === 'admin',
+      isSuperAdmin: user?.permissions?.is_super_admin ?? false,
+      permissions: user?.permissions ?? null,
+    }),
+    [user, loading, error, login, loginWithTelegram, logout, checkAuthStatus]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

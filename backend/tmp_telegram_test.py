@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 result = {'routes': [], 'call': None, 'exception': None}
 for route in app.routes:
-    if '/api/v1/telegram/webhook' in route.path:
+    if hasattr(route, 'path') and '/api/v1/telegram/webhook' in route.path:
         result['routes'].append({'path': route.path, 'methods': sorted(route.methods or []), 'name': route.name})
 
 try:

@@ -202,12 +202,14 @@ class DatabaseManager:
                     logger.info("Using default pool for SQLite (pool sizing parameters are not applicable)")
                 else:
                     # Non-Lambda, non-SQLite: Use QueuePool with connection pooling
+                    # Render free tier DBs have strict connection limits (often 10).
+                    # Using a smaller pool size to avoid "too many connections" errors.
                     engine_kwargs["pool_pre_ping"] = True  # Verify connections before using them
-                    engine_kwargs["pool_size"] = 10  # Connection pool size
-                    engine_kwargs["max_overflow"] = 20  # Maximum overflow connections
-                    engine_kwargs["pool_recycle"] = 3600  # Connection recycle time (1 hour)
+                    engine_kwargs["pool_size"] = 5  # Connection pool size
+                    engine_kwargs["max_overflow"] = 5  # Maximum overflow connections
+                    engine_kwargs["pool_recycle"] = 1800  # Connection recycle time (30 mins)
                     engine_kwargs["pool_timeout"] = 30  # Connection acquisition timeout (30 seconds)
-                    logger.info("Using QueuePool with connection pooling for non-Lambda environment")
+                    logger.info("Using conservative connection pool for non-Lambda environment (pool_size=5)")
 
                 self.engine = create_async_engine(database_url, **engine_kwargs)
                 logger.info("Database engine created successfully")
@@ -305,7 +307,8 @@ class DatabaseManager:
 
             logger.info(f"🔧 Repairing {len(tables_to_repair)} existing tables...")
 
-            semaphore = asyncio.Semaphore(10)
+            # Use a smaller semaphore to avoid exhausting DB connections during startup
+            semaphore = asyncio.Semaphore(3)
 
             async def repair_with_semaphore(table_name):
                 start_time = time.time()

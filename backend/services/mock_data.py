@@ -13,7 +13,7 @@ from sqlalchemy.exc import NoSuchTableError, SQLAlchemyError
 logger = logging.getLogger(__name__)
 
 MOCK_DATA_DIR = Path(__file__).resolve().parent.parent / "mock_data"
-MAX_CONCURRENT_LOADS = 5
+MAX_CONCURRENT_LOADS = 2
 
 
 def _resolve_demo_owner_id() -> str:
