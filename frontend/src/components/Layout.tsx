@@ -11,6 +11,7 @@ import {
   ChevronRight, Zap, Bell, CheckCircle, XCircle, Clock, Bot,
   MessageSquare, ArrowUpFromLine, DollarSign, ClipboardList,
   ChevronDown, Lock, FileCheck, AlertCircle, Sparkles, Code2, BookOpen,
+  QrCode,
 } from 'lucide-react';
 import { APP_NAME } from '@/lib/brand';
 import '../styles/dashboard-enhancements.css';

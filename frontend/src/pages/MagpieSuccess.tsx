@@ -1,9 +1,9 @@
+import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, ArrowRight, Bot, ShieldCheck, Download, Home } from 'lucide-react';
 import { APP_NAME } from '@/lib/brand';
-import React from 'react';
 
 function useQuery() {
   const { search } = useLocation();
