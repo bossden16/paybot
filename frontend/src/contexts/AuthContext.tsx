@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import { authApi, TelegramWidgetUser } from '../lib/auth';
@@ -114,9 +115,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuthStatus();
-  }, [checkAuthStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const value: AuthContextType = {
+  const value: AuthContextType = useMemo(() => ({
     user,
     loading,
     error,
@@ -127,7 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdmin: user?.role === 'admin',
     isSuperAdmin: user?.permissions?.is_super_admin ?? false,
     permissions: user?.permissions ?? null,
-  };
+  }), [user, loading, error, login, loginWithTelegram, logout, checkAuthStatus]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -68,7 +68,8 @@ export default function Merchants() {
 
   useEffect(() => {
     fetchMerchants();
-  }, [fetchMerchants]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const handleSearch = () => { setPage(1); fetchMerchants(query, 1); };
 
