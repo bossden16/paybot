@@ -104,13 +104,13 @@ function AuthAwareShell() {
   const [exitingLoader, setExitingLoader] = useState(false);
 
   useEffect(() => {
-    if (!loading && showLoader) {
+    if (!loading && showLoader && !exitingLoader) {
       // Start the exit animation, then unmount after it completes.
       setExitingLoader(true);
       const t = setTimeout(() => setShowLoader(false), 450);
       return () => clearTimeout(t);
     }
-  }, [loading, showLoader]);
+  }, [loading, showLoader, exitingLoader]);
 
   if (showLoader) return <AppLoadingScreen exiting={exitingLoader} />;
 

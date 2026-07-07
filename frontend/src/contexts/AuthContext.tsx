@@ -65,7 +65,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuthStatus = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       const userData = await authApi.getCurrentUser();
       setUser(userData);
@@ -118,7 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const value: AuthContextType = useMemo(() => ({
+  const value: AuthContextType = {
     user,
     loading,
     error,
@@ -129,7 +128,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdmin: user?.role === 'admin',
     isSuperAdmin: user?.permissions?.is_super_admin ?? false,
     permissions: user?.permissions ?? null,
-  }), [user, loading, error, login, loginWithTelegram, logout, checkAuthStatus]);
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
