@@ -35,17 +35,13 @@ interface NavItem {
 }
 
 const userNavItems: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Payments Hub', icon: CreditCard, path: '/payments' },
-  { label: 'QR Codes', icon: QrCode, path: '/qr-codes' },
+  { label: 'Overview', icon: LayoutDashboard, path: '/' },
+  { label: 'Payments', icon: CreditCard, path: '/payments' },
   { label: 'Disbursements', icon: Send, path: '/disbursements' },
+  { label: 'QR Codes', icon: QrCode, path: '/qr-codes' },
+  { label: 'Wallet', icon: Wallet, path: '/wallet' },
   { label: 'Transactions', icon: FileText, path: '/transactions' },
   { label: 'Reports', icon: BarChart3, path: '/reports' },
-  { label: 'Wallet', icon: Wallet, path: '/wallet' },
-  { label: 'Compliance', icon: FileCheck, path: '/compliance' },
-  { label: 'Bot Messages', icon: MessageSquare, path: '/bot-messages' },
-  { label: 'Developer Experience', icon: Code2, path: '/developer-experience', permission: 'can_manage_bot' },
-  { label: 'API Docs', icon: BookOpen, path: '/api-docs', permission: 'can_manage_bot' },
 ];
 
 const adminNavItems: NavItem[] = [

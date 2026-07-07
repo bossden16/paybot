@@ -648,3 +648,16 @@ async def get_db() -> AsyncSession:
         else:
             logger.error(f"Failed to create database session: {e}", exc_info=True)
         raise
+
+
+async def close_db():
+    """Module-level helper to close database connections.
+
+    This is provided for imports that expect a simple coroutine
+    (e.g., ``from core.database import close_db``). It forwards
+    to the `DatabaseManager.close_db` implementation.
+    """
+    try:
+        await db_manager.close_db()
+    except Exception as e:
+        logger.warning(f"Error while closing database: {e}")

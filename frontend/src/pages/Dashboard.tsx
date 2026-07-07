@@ -250,6 +250,12 @@ export default function Dashboard() {
   const greeting = getGreeting();
   const userName = (user as { name?: string; telegram_username?: string } | null)?.name ||
     (user as { telegram_username?: string } | null)?.telegram_username || '';
+  const quickActions = [
+    { label: 'Create payment', description: 'Open the payment hub for invoices and links', href: '/payments', icon: CreditCard, tone: 'from-blue-600/10 to-cyan-600/5', iconColor: 'text-blue-600' },
+    { label: 'QR payments', description: 'Generate QRPH codes and connect terminals', href: '/qr-codes', icon: QrCode, tone: 'from-emerald-600/10 to-teal-600/5', iconColor: 'text-emerald-600' },
+    { label: 'Wallet view', description: 'Review PHP and USDT balances in one place', href: '/wallet', icon: Wallet, tone: 'from-violet-600/10 to-fuchsia-600/5', iconColor: 'text-violet-600' },
+    { label: 'Reports', description: 'Check settlement trends and recent activity', href: '/reports', icon: BarChart3, tone: 'from-amber-600/10 to-orange-600/5', iconColor: 'text-amber-600' },
+  ];
 
   return (
     <Layout connected={connected}>
@@ -300,6 +306,27 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ===== QUICK ACTIONS ===== */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        {quickActions.map(({ label, description, href, icon: Icon, tone, iconColor }) => (
+          <Link key={label} to={href} className="group block">
+            <Card className="h-full border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+              <div className={`h-1 w-full bg-gradient-to-r ${tone}`} />
+              <CardContent className="p-4">
+                <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 ${iconColor}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="font-semibold text-foreground">{label}</h3>
+                <p className="mt-1 text-sm text-slate-500">{description}</p>
+                <div className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-slate-600 group-hover:text-slate-900">
+                  Open now <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
 
       {/* ===== WALLET CARDS + STATS ROW ===== */}

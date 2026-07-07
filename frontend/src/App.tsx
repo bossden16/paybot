@@ -83,7 +83,7 @@ function AuthAwareShell() {
         <Route path="/wallet" element={<ProtectedAdminRoute><Wallet /></ProtectedAdminRoute>} />
         <Route path="/transactions" element={<ProtectedAdminRoute><Transactions /></ProtectedAdminRoute>} />
         <Route path="/payments" element={<ProtectedAdminRoute><CreatePayment /></ProtectedAdminRoute>} />
-        <Route path="/create-payment" element={<ProtectedAdminRoute><CreatePayment /></ProtectedAdminRoute>} />
+        <Route path="/create-payment" element={<Navigate to="/payments" replace />} />
         <Route path="/qr-codes" element={<ProtectedAdminRoute><QRCodesPage /></ProtectedAdminRoute>} />
         <Route path="/scan-qrph" element={<ProtectedAdminRoute><ScanQRPH /></ProtectedAdminRoute>} />
         <Route path="/disbursements" element={<ProtectedAdminRoute><DisbursementsPage /></ProtectedAdminRoute>} />
