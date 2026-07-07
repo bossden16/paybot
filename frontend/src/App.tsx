@@ -5,50 +5,49 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-route
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import TopProgressBar from '@/components/TopProgressBar';
 import AppLoadingScreen from '@/components/AppLoadingScreen';
-import Dashboard from './pages/Dashboard';
-import Wallet from './pages/Wallet';
-import Transactions from './pages/Transactions';
-import CreatePayment from './pages/CreatePayment';
-import DisbursementsPage from './pages/DisbursementsPage';
-import ReportsPage from './pages/ReportsPage';
-import BotSettings from './pages/BotSettings';
-import Settings from './pages/Settings';
-import MessengerPage from './pages/MessengerPage';
-import AdminManagement from './pages/AdminManagement';
-import BotMessagesPage from './pages/BotMessagesPage';
-import TopupRequestsPage from './pages/TopupRequestsPage';
-import UsdtSendRequestsPage from './pages/UsdtSendRequestsPage';
-import BankDepositsPage from './pages/BankDepositsPage';
-import KybRegistrationsPage from './pages/KybRegistrationsPage';
-import KycVerificationsPage from './pages/KycVerificationsPage';
-import RolesPage from './pages/RolesPage';
-import RequireSuperAdmin from './components/RequireSuperAdmin';
-import RequireDeveloperRole from './components/RequireDeveloperRole';
-import ProtectedAdminRoute from './components/ProtectedAdminRoute';
-import DeveloperExperience from './pages/DeveloperExperience';
-import ApiDocsPage from './pages/ApiDocsPage';
-import Policies from './pages/Policies';
-import Compliance from './pages/Compliance';
-import Features from './pages/Features';
-import Pricing from './pages/Pricing';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import AuthCallback from './pages/AuthCallback';
-import AuthError from './pages/AuthError';
-import LogoutCallbackPage from './pages/LogoutCallbackPage';
-import NotFound from './pages/NotFound';
-import MaintenancePage from './pages/MaintenancePage';
-import BotIntro from './pages/BotIntro';
-import ScanQRPH from './pages/ScanQRPH';
-import HomePage from './pages/Index';
-import MagpieSuccess from './pages/MagpieSuccess';
 
-// Lazy load new / heavy pages to ensure core app boots even if bundles are slow or broken
-const Checkout = React.lazy(() => import('./pages/Checkout'));
+// Lazy load all pages to isolate the main bundle from page-level errors
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Wallet = React.lazy(() => import('./pages/Wallet'));
+const Transactions = React.lazy(() => import('./pages/Transactions'));
+const CreatePayment = React.lazy(() => import('./pages/CreatePayment'));
 const QRCodesPage = React.lazy(() => import('./pages/QRCodesPage'));
+const ScanQRPH = React.lazy(() => import('./pages/ScanQRPH'));
+const DisbursementsPage = React.lazy(() => import('./pages/DisbursementsPage'));
+const ReportsPage = React.lazy(() => import('./pages/ReportsPage'));
+const BotSettings = React.lazy(() => import('./pages/BotSettings'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const MessengerPage = React.lazy(() => import('./pages/MessengerPage'));
+const AdminManagement = React.lazy(() => import('./pages/AdminManagement'));
+const BotMessagesPage = React.lazy(() => import('./pages/BotMessagesPage'));
+const TopupRequestsPage = React.lazy(() => import('./pages/TopupRequestsPage'));
+const UsdtSendRequestsPage = React.lazy(() => import('./pages/UsdtSendRequestsPage'));
+const BankDepositsPage = React.lazy(() => import('./pages/BankDepositsPage'));
+const KybRegistrationsPage = React.lazy(() => import('./pages/KybRegistrationsPage'));
+const KycVerificationsPage = React.lazy(() => import('./pages/KycVerificationsPage'));
+const RolesPage = React.lazy(() => import('./pages/RolesPage'));
+const Policies = React.lazy(() => import('./pages/Policies'));
+const Compliance = React.lazy(() => import('./pages/Compliance'));
+const Features = React.lazy(() => import('./pages/Features'));
+const Pricing = React.lazy(() => import('./pages/Pricing'));
+const Login = React.lazy(() => import('./pages/Login'));
+const Register = React.lazy(() => import('./pages/Register'));
+const AuthCallback = React.lazy(() => import('./pages/AuthCallback'));
+const AuthError = React.lazy(() => import('./pages/AuthError'));
+const LogoutCallbackPage = React.lazy(() => import('./pages/LogoutCallbackPage'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
+const MaintenancePage = React.lazy(() => import('./pages/MaintenancePage'));
+const BotIntro = React.lazy(() => import('./pages/BotIntro'));
+const HomePage = React.lazy(() => import('./pages/Index'));
+const MagpieSuccess = React.lazy(() => import('./pages/MagpieSuccess'));
+const Checkout = React.lazy(() => import('./pages/Checkout'));
+
+const RequireSuperAdmin = React.lazy(() => import('./components/RequireSuperAdmin'));
+const RequireDeveloperRole = React.lazy(() => import('./components/RequireDeveloperRole'));
+const ProtectedAdminRoute = React.lazy(() => import('./components/ProtectedAdminRoute'));
 
 const queryClient = new QueryClient();
 
@@ -118,50 +117,71 @@ function AuthAwareShell() {
           remount (and re-fetch) on every navigation. */}
       <MaintenanceGuard>
         <PageFade>
-          <Routes>
-            <Route path="/home" element={<HomePage />} />
-            <Route path="/intro" element={<BotIntro />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/features" element={<Features />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/auth/error" element={<AuthError />} />
-            <Route path="/logout-callback" element={<LogoutCallbackPage />} />
-            <Route path="/maintenance" element={<MaintenancePage />} />
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/payments" element={<CreatePayment />} />
-            <Route path="/create-payment" element={<CreatePayment />} />
-            <Route path="/qr-codes" element={<React.Suspense fallback={<AppLoadingScreen />}><QRCodesPage /></React.Suspense>} />
-            <Route path="/scan-qrph" element={<ScanQRPH />} />
-            <Route path="/disbursements" element={<DisbursementsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/bot-settings" element={<RequireSuperAdmin><BotSettings /></RequireSuperAdmin>} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/messenger" element={<MessengerPage />} />
-            <Route path="/developer-experience" element={<RequireDeveloperRole><DeveloperExperience /></RequireDeveloperRole>} />
-            <Route path="/api-docs" element={<RequireDeveloperRole><ApiDocsPage /></RequireDeveloperRole>} />
-            <Route path="/admin-management" element={<ProtectedAdminRoute><AdminManagement /></ProtectedAdminRoute>} />
-            <Route path="/bot-messages" element={<ProtectedAdminRoute><BotMessagesPage /></ProtectedAdminRoute>} />
-            <Route path="/topup-requests" element={<RequireSuperAdmin><TopupRequestsPage /></RequireSuperAdmin>} />
-            <Route path="/usdt-send-requests" element={<RequireSuperAdmin><UsdtSendRequestsPage /></RequireSuperAdmin>} />
-            <Route path="/bank-deposits" element={<RequireSuperAdmin><BankDepositsPage /></RequireSuperAdmin>} />
-            <Route path="/kyb-registrations" element={<RequireSuperAdmin><KybRegistrationsPage /></RequireSuperAdmin>} />
-            <Route path="/kyc-verifications" element={<RequireSuperAdmin><KycVerificationsPage /></RequireSuperAdmin>} />
-            <Route path="/roles" element={<RequireSuperAdmin><RolesPage /></RequireSuperAdmin>} />
-            <Route path="/policies" element={<Policies />} />
-            <Route path="/compliance" element={<Compliance />} />
-            <Route path="/magpie-success" element={<MagpieSuccess />} />
-            <Route path="/checkout/:identifier" element={<React.Suspense fallback={<AppLoadingScreen />}><Checkout /></React.Suspense>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<AppLoadingScreen />}>
+            <Routes>
+              <Route path="/home" element={<HomePage />} />
+              <Route path="/intro" element={<BotIntro />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/features" element={<Features />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/error" element={<AuthError />} />
+              <Route path="/logout-callback" element={<LogoutCallbackPage />} />
+              <Route path="/maintenance" element={<MaintenancePage />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/wallet" element={<Wallet />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/payments" element={<CreatePayment />} />
+              <Route path="/create-payment" element={<CreatePayment />} />
+              <Route path="/qr-codes" element={<QRCodesPage />} />
+              <Route path="/scan-qrph" element={<ScanQRPH />} />
+              <Route path="/disbursements" element={<DisbursementsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/bot-settings" element={<BotSettings />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/messenger" element={<MessengerPage />} />
+              <Route path="/developer-experience" element={<DeveloperExperience />} />
+              <Route path="/api-docs" element={<ApiDocsPage />} />
+              <Route path="/admin-management" element={<AdminManagement />} />
+              <Route path="/bot-messages" element={<BotMessagesPage />} />
+              <Route path="/topup-requests" element={<TopupRequestsPage />} />
+              <Route path="/usdt-send-requests" element={<UsdtSendRequestsPage />} />
+              <Route path="/bank-deposits" element={<BankDepositsPage />} />
+              <Route path="/kyb-registrations" element={<KybRegistrationsPage />} />
+              <Route path="/kyc-verifications" element={<KycVerificationsPage />} />
+              <Route path="/roles" element={<RolesPage />} />
+              <Route path="/policies" element={<Policies />} />
+              <Route path="/compliance" element={<Compliance />} />
+              <Route path="/magpie-success" element={<MagpieSuccess />} />
+              <Route path="/checkout/:identifier" element={<Checkout />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </PageFade>
       </MaintenanceGuard>
     </>
   );
 }
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
+      <LanguageProvider>
+        <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <BrowserRouter>
+            <AuthAwareShell />
+          </BrowserRouter>
+        </TooltipProvider>
+        </AuthProvider>
+      </LanguageProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
+);
+
+export default App;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
