@@ -195,18 +195,21 @@ class Settings(BaseSettings):
     def generate_jwt_secret_if_missing(self) -> "Settings":
         """Auto-generate a random JWT secret when JWT_SECRET_KEY is not configured.
 
-        The generated key is ephemeral — it changes on every restart, which means
-        all active sessions will be invalidated when the server restarts.  Set
-        JWT_SECRET_KEY explicitly in your environment variables (or .env file) for
-        persistent authentication across restarts.
+        In production, this will log a CRITICAL warning as it invalidates sessions on restart.
         """
         if not self.jwt_secret_key:
             self.jwt_secret_key = secrets.token_hex(32)
-            logger.warning(
-                "JWT_SECRET_KEY is not configured. A temporary random secret has been "
-                "generated for this session. Tokens will be invalidated on restart. "
-                "Set JWT_SECRET_KEY in your environment variables for persistent authentication."
-            )
+            if self.environment == "production":
+                logger.critical(
+                    "!!! SECURITY WARNING: JWT_SECRET_KEY is not configured in PRODUCTION !!! "
+                    "A temporary random secret has been generated. ALL SESSIONS WILL BE INVALIDATED ON RESTART. "
+                    "Please set JWT_SECRET_KEY in your environment variables immediately."
+                )
+            else:
+                logger.warning(
+                    "JWT_SECRET_KEY is not configured. A temporary random secret has been "
+                    "generated for this session. Tokens will be invalidated on restart."
+                )
         return self
 
     @property

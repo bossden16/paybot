@@ -29,7 +29,11 @@ async def lifespan(app: FastAPI):
         # Initialize Core Services
         await initialize_database()
         await initialize_admin_user()
-        await initialize_demo_users()
+
+        # Only initialize demo data if explicitly requested
+        if os.getenv("INITIALIZE_DEMO_DATA") == "1":
+            logger.info("BOOT: Initializing demo users/data...")
+            await initialize_demo_users()
 
         # Reset maintenance state
         try:
