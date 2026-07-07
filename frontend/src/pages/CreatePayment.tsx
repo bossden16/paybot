@@ -36,6 +36,7 @@ import {
   CreditCard,
   Bot,
   Info,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
