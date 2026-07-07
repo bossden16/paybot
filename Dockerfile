@@ -25,7 +25,10 @@ COPY frontend/ .
 RUN pnpm build
 
 # ── Stage 2: Python backend ──────────────────────────────────────────────────
-FROM python:3.11-slim
+## Pin to a specific, fully-qualified Python slim tag to avoid anonymous-mirror
+## redirect issues in some CI/CD builders (uses explicit Debian slim variant).
+## Use Chainguard's minimal Python image to avoid Docker Hub and mirror token issues.
+FROM cgr.dev/chainguard/python:3.11
 
 WORKDIR /app/backend
 

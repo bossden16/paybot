@@ -819,6 +819,7 @@ async def login_mobile(payload: LoginRequest, db: AsyncSession = Depends(get_db)
     )
 
 
+@router.get("/login")
 async def login(request: Request, db: AsyncSession = Depends(get_db)):
     """Start OIDC login flow with PKCE."""
     state = generate_state()
