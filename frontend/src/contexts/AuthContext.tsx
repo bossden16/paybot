@@ -58,7 +58,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,15 +95,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     [checkAuthStatus]
   );
 
-  const loginWithTelegram = useCallback(async (telegramUser: TelegramWidgetUser, cfTurnstileToken?: string | null) => {
-    try {
-      setError(null);
-      await authApi.loginWithTelegram(telegramUser, cfTurnstileToken);
-      await checkAuthStatus();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Telegram login failed');
-    }
-  }, [checkAuthStatus]);
+  const loginWithTelegram = useCallback(
+    async (telegramUser: TelegramWidgetUser, cfTurnstileToken?: string | null) => {
+      try {
+        setError(null);
+        await authApi.loginWithTelegram(telegramUser, cfTurnstileToken);
+        await checkAuthStatus();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Telegram login failed');
+      }
+    },
+    [checkAuthStatus]
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -117,23 +120,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuthStatus();
-  }, [checkAuthStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const value = useMemo(
-    (): AuthContextType => ({
-      user,
-      loading,
-      error,
-      login,
-      loginWithTelegram,
-      logout,
-      refetch: checkAuthStatus,
-      isAdmin: user?.role === 'admin',
-      isSuperAdmin: user?.permissions?.is_super_admin ?? false,
-      permissions: user?.permissions ?? null,
-    }),
-    [user, loading, error, login, loginWithTelegram, logout, checkAuthStatus]
-  );
+  const value: AuthContextType = {
+    user,
+    loading,
+    error,
+    login,
+    loginWithTelegram,
+    logout,
+    refetch: checkAuthStatus,
+    isAdmin: user?.role === 'admin',
+    isSuperAdmin: user?.permissions?.is_super_admin ?? false,
+    permissions: user?.permissions ?? null,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+}
