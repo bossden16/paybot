@@ -228,8 +228,7 @@ export default function ScanQRPH() {
         toast.error(res.data?.message || 'Payment failed');
       }
     } catch (err) {
-      const error = err as any;
-      const message = error?.data?.detail || error?.message || 'Payment failed';
+      const message = (err as any)?.data?.detail || (err as Error)?.message || 'Payment failed';
       toast.error(message);
     } finally {
       setLoading(false);

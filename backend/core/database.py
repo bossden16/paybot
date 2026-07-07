@@ -131,100 +131,6 @@ class DatabaseManager:
             logger.error(f"Database not found:{filename}")
         return found
 
-    async def init_db(self):
-        """Initialize database connection with thread safety"""
-        logger.info("Starting database initialization...")
-
-        async with self._init_lock:
-            if self.engine is not None and self.async_session_maker is not None:
-                logger.info("Database already initialized")
-                return
-
-            if not settings.database_url:
-                logger.error("No database URL provided. DATABASE_URL environment variable must be set.")
-                raise ValueError("DATABASE_URL environment variable is required")
-
-            try:
-                logger.info("Normalizing database URL for async compatibility...")
-                database_url = self._normalize_async_database_url(settings.database_url)
-                try:
-                    parsed = make_url(database_url)
-                    pg_user = os.environ.get("PGUSER")
-                    pg_password = os.environ.get("PGPASSWORD")
-                    url_password = parsed.password or ""
-                    logger.info(
-                        "Database target resolved: driver=%s host=%s port=%s db=%s user=%s",
-                        parsed.drivername,
-                        parsed.host,
-                        parsed.port,
-                        parsed.database,
-                        parsed.username,
-                    )
-                    logger.info(
-                        "Database credential diagnostics: url_user_matches_pguser=%s url_password_len=%s pgpassword_len=%s",
-                        bool(pg_user and parsed.username == pg_user),
-                        len(url_password),
-                        len(pg_password) if pg_password else 0,
-                    )
-                except Exception:
-                    logger.warning("Database target could not be parsed for diagnostics")
-
-                logger.info("Creating async database engine...")
-                # Configure engine based on environment (Lambda vs non-Lambda)
-                engine_kwargs = {
-                    "echo": settings.debug,
-                }
-
-                # Add SSL for non-local PostgreSQL (Render, Railway, etc. require it)
-                pg_connect_args = self._get_pg_connect_args(database_url)
-                if pg_connect_args:
-                    engine_kwargs["connect_args"] = pg_connect_args
-                    logger.info("PostgreSQL: SSL enabled for remote host")
-
-                # Check if we're in a Lambda environment
-                is_lambda = bool(
-                    os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
-                    or os.environ.get("IS_LAMBDA", "").lower() in ("true", "1", "yes")
-                )
-
-                # SQLite does not support pool sizing parameters
-                is_sqlite = "sqlite" in database_url.lower()
-
-                if is_lambda:
-                    # Lambda: Use NullPool to avoid connection state conflicts
-                    # NullPool creates a fresh connection for each request, avoiding "cannot switch to state" errors
-                    engine_kwargs["poolclass"] = NullPool
-                    # NullPool doesn't support pool_timeout, pool_size, max_overflow, pool_recycle, or pool_pre_ping
-                    # These parameters are only valid for QueuePool
-                    logger.info("Using NullPool for Lambda environment to avoid connection state conflicts")
-                elif is_sqlite:
-                    # SQLite: pool_size/max_overflow/pool_recycle/pool_timeout are not applicable for an embedded DB
-                    logger.info("Using default pool for SQLite (pool sizing parameters are not applicable)")
-                else:
-                    # Non-Lambda, non-SQLite: Use QueuePool with connection pooling
-                    # Render free tier DBs have strict connection limits (often 10).
-                    # Using a smaller pool size to avoid "too many connections" errors.
-                    engine_kwargs["pool_pre_ping"] = True  # Verify connections before using them
-                    engine_kwargs["pool_size"] = 5  # Connection pool size
-                    engine_kwargs["max_overflow"] = 5  # Maximum overflow connections
-                    engine_kwargs["pool_recycle"] = 1800  # Connection recycle time (30 mins)
-                    engine_kwargs["pool_timeout"] = 30  # Connection acquisition timeout (30 seconds)
-                    logger.info("Using conservative connection pool for non-Lambda environment (pool_size=5)")
-
-                self.engine = create_async_engine(database_url, **engine_kwargs)
-                logger.info("Database engine created successfully")
-
-                logger.info("Creating async session maker...")
-                self.async_session_maker = async_sessionmaker(self.engine, class_=AsyncSession, expire_on_commit=False)
-                logger.info("Async session maker created successfully")
-
-                logger.info("Database connection initialized successfully")
-            except Exception as e:
-                self.engine = None  # Reset so the next call can retry initialization
-                self.async_session_maker = None
-                logger.error(f"Failed to initialize database: {e}", exc_info=True)
-                raise
-
     async def close_db(self):
         """Close database connection and dispose engine
 
@@ -623,11 +529,33 @@ class DatabaseManager:
     async def _perform_initialization(self):
         """Internal initialization logic without locking (caller must hold lock)"""
         if not settings.database_url:
+            logger.error("No database URL provided. DATABASE_URL environment variable must be set.")
             raise ValueError("DATABASE_URL environment variable is required")
 
         try:
             logger.info("Normalizing database URL for async compatibility...")
             database_url = self._normalize_async_database_url(settings.database_url)
+            try:
+                parsed = make_url(database_url)
+                pg_user = os.environ.get("PGUSER")
+                pg_password = os.environ.get("PGPASSWORD")
+                url_password = parsed.password or ""
+                logger.info(
+                    "Database target resolved: driver=%s host=%s port=%s db=%s user=%s",
+                    parsed.drivername,
+                    parsed.host,
+                    parsed.port,
+                    parsed.database,
+                    parsed.username,
+                )
+                logger.info(
+                    "Database credential diagnostics: url_user_matches_pguser=%s url_password_len=%s pgpassword_len=%s",
+                    bool(pg_user and parsed.username == pg_user),
+                    len(url_password),
+                    len(pg_password) if pg_password else 0,
+                )
+            except Exception:
+                logger.warning("Database target could not be parsed for diagnostics")
 
             logger.info("Creating async database engine...")
             engine_kwargs = {"echo": settings.debug}
@@ -635,6 +563,7 @@ class DatabaseManager:
             pg_connect_args = self._get_pg_connect_args(database_url)
             if pg_connect_args:
                 engine_kwargs["connect_args"] = pg_connect_args
+                logger.info("PostgreSQL: SSL enabled for remote host")
 
             # Connection pooling configuration
             is_lambda = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("IS_LAMBDA", "").lower() in ("true", "1", "yes"))
@@ -642,15 +571,23 @@ class DatabaseManager:
 
             if is_lambda:
                 engine_kwargs["poolclass"] = NullPool
-            elif not is_sqlite:
+                logger.info("Using NullPool for Lambda environment")
+            elif is_sqlite:
+                logger.info("Using default pool for SQLite")
+            else:
                 engine_kwargs["pool_pre_ping"] = True
                 engine_kwargs["pool_size"] = 5
                 engine_kwargs["max_overflow"] = 5
                 engine_kwargs["pool_recycle"] = 1800
                 engine_kwargs["pool_timeout"] = 30
+                logger.info("Using conservative connection pool (pool_size=5)")
 
             self.engine = create_async_engine(database_url, **engine_kwargs)
+            logger.info("Database engine created successfully")
+
+            logger.info("Creating async session maker...")
             self.async_session_maker = async_sessionmaker(self.engine, class_=AsyncSession, expire_on_commit=False)
+            logger.info("Async session maker created successfully")
         except Exception as e:
             self.engine = None
             self.async_session_maker = None

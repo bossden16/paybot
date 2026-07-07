@@ -277,7 +277,7 @@ export default function BotSettings() {
     return err?.status === 401 || (typeof err?.data?.detail === 'string' && err.data.detail.toLowerCase().includes('unauthorized'));
   };
 
-  const fetchBotInfo = async () => {
+  const fetchBotInfo = useCallback(async () => {
     setBotLoading(true); setBotError('');
     try {
       const res = await client.apiCall.invoke({ url: '/api/v1/telegram/bot-info', method: 'GET', data: {} });
@@ -287,23 +287,23 @@ export default function BotSettings() {
       if (is401(e)) setBotError('Authentication required.');
       else { const m = getErr(e); setBotError(m); toast.error(`Bot connection failed: ${m}`); }
     } finally { setBotLoading(false); }
-  };
+  }, []);
 
-  const fetchWebhookInfo = async () => {
+  const fetchWebhookInfo = useCallback(async () => {
     setWebhookInfoLoading(true);
     try {
       const res = await client.apiCall.invoke({ url: '/api/v1/telegram/webhook-info', method: 'GET', data: {} });
       setWebhookInfo(res.data as WebhookInfo);
     } catch (e) { if (!is401(e)) toast.error(`Could not fetch webhook status: ${getErr(e)}`); }
     finally { setWebhookInfoLoading(false); }
-  };
+  }, []);
 
-  const fetchCloneInfo = async () => {
+  const fetchCloneInfo = useCallback(async () => {
     try {
       const res = await client.apiCall.invoke({ url: '/api/v1/telegram/clone-bot/info', method: 'GET', data: {} });
       setCloneInfo(res.data as CloneBotInfo);
     } catch { /* silently ignore */ }
-  };
+  }, []);
 
   const fetchBotConfig = useCallback(async () => {
     if (!user) return;
@@ -315,9 +315,15 @@ export default function BotSettings() {
     finally { setConfigLoading(false); }
   }, [user]);
 
-  useEffect(() => { fetchBotInfo(); }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (user) { fetchWebhookInfo(); fetchCloneInfo(); fetchBotConfig(); } }, [user]);
+  useEffect(() => { fetchBotInfo(); }, [fetchBotInfo]);
+
+  useEffect(() => {
+    if (user) {
+      fetchWebhookInfo();
+      fetchCloneInfo();
+      fetchBotConfig();
+    }
+  }, [user, fetchWebhookInfo, fetchCloneInfo, fetchBotConfig]);
 
   const handleCloneValidate = async () => {
     if (!cloneToken.trim()) { toast.error('Enter a bot token first'); return; }

@@ -274,10 +274,10 @@ export default function Login() {
       container.appendChild(s);
     };
     renderWidget();
+    const currentContainer = widgetContainerRef.current;
     return () => {
       canceled = true;
-      const container = widgetContainerRef.current;
-      if (container) container.innerHTML = '';
+      if (currentContainer) currentContainer.innerHTML = '';
       delete window.onTelegramAuth;
     };
   }, [botUsername, loginWithTelegram, turnstileToken, turnstileSiteKey]);

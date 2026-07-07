@@ -30,7 +30,7 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
 
   // If the user is not logged in, redirect to the login page
   if (!user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // If the user is not an admin, show an insufficient-permissions page

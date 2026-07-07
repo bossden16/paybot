@@ -350,7 +350,7 @@ function UserManagementTab({
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/v1/users');
@@ -361,11 +361,11 @@ function UserManagementTab({
     } finally {
       setLoading(false);
     }
-  };
+  }, [onError]);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
   const handleRoleChange = async (user: RegisteredUser, role: string) => {
     if (!isSuperAdmin) return;
@@ -1083,7 +1083,7 @@ export default function AdminManagement() {
   const [roles, setRoles] = useState<RolePreset[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
 
-  const fetchAdmins = async () => {
+  const fetchAdmins = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/v1/admin-users');
@@ -1094,9 +1094,9 @@ export default function AdminManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMaintenanceMode = async () => {
+  const fetchMaintenanceMode = useCallback(async () => {
     try {
       setMaintenanceLoading(true);
       const res = await fetch('/api/v1/app-settings/maintenance');
@@ -1108,9 +1108,9 @@ export default function AdminManagement() {
     } finally {
       setMaintenanceLoading(false);
     }
-  };
+  }, []);
 
-  const fetchRoles = async () => {
+  const fetchRoles = useCallback(async () => {
     try {
       setRolesLoading(true);
       const res = await fetch('/api/v1/roles');
@@ -1121,7 +1121,7 @@ export default function AdminManagement() {
     } finally {
       setRolesLoading(false);
     }
-  };
+  }, []);
 
   const handleToggleMaintenance = async () => {
     if (!isSuperAdmin || maintenanceUpdating) return;
@@ -1148,7 +1148,7 @@ export default function AdminManagement() {
     fetchRoles();
     const id = setInterval(fetchAdmins, 30000);
     return () => clearInterval(id);
-  }, []);
+  }, [fetchAdmins, fetchMaintenanceMode, fetchRoles]);
 
   const handleAdd = async () => {
     if (!form.telegram_id.trim()) return;

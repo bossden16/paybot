@@ -129,6 +129,17 @@ echo ""
 
 # Step 7: Deploy to EB
 echo -e "${YELLOW}🚀 Deploying to Elastic Beanstalk...${NC}"
+
+# Create a temporary deployment bundle containing only required AWS EB config
+echo -e "${YELLOW}📦 Creating deployment bundle...${NC}"
+zip -r temp.zip Dockerrun.aws.json .ebextensions 2>/dev/null || true
+
+# Copy bundle to S3 (EB requires the source bundle to exist in S3 for new versions)
+aws s3 cp temp.zip s3://elasticbeanstalk-${AWS_REGION}-${AWS_ACCOUNT_ID}/temp.zip || {
+  echo -e "${RED}❌ Failed to upload bundle to S3${NC}"
+  # Continue anyway as the environment update might still work if the file already exists
+}
+
 aws elasticbeanstalk create-application-version \
   --application-name ${EB_APP_NAME} \
   --version-label ${IMAGE_NAME}-${TIMESTAMP} \

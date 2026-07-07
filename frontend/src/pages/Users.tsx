@@ -61,7 +61,7 @@ export default function Users() {
     setSubmitLoading(false);
   };
 
-  const fetchUsers = async (q = query, p = page, sField: string | null = sortField, sDir: 'asc' | 'desc' | null = sortDir) => {
+  const fetchUsers = useCallback(async (q = query, p = page, sField: string | null = sortField, sDir: 'asc' | 'desc' | null = sortDir) => {
     setLoading(true);
     try {
       const url = new URL('/api/v1/users', window.location.origin);
@@ -82,7 +82,7 @@ export default function Users() {
       setUsers([]);
       setTotal(0);
     } finally { setLoading(false); }
-  };
+  }, [query, page, sortField, sortDir, perPage]);
 
   const handleSort = (field: string) => {
     let nextDir: 'asc' | 'desc' = 'asc';
@@ -93,7 +93,7 @@ export default function Users() {
     fetchUsers(query, 1, field, nextDir);
   };
 
-  useEffect(() => { fetchUsers(); /* eslint-disable-next-line */ }, [page]);
+  useEffect(() => { fetchUsers(); }, [page, fetchUsers]);
 
   const handleSearch = () => { setPage(1); fetchUsers(query, 1); };
 

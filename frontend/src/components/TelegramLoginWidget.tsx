@@ -50,7 +50,7 @@ export default function TelegramLoginWidget({
       if (container) {
         container.innerHTML = '';
       }
-      delete window.onTelegramAuth;
+      delete (window as any).onTelegramAuth;
     };
   }, [botName, onAuth, buttonSize, cornerRadius, requestAccess]);
 
