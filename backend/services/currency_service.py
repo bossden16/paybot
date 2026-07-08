@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONVERSION_FEE = 0.01
 
 # Supported currencies
-SUPPORTED_CURRENCIES = ["PHP", "USD", "EUR", "GBP", "SGD"]
+SUPPORTED_CURRENCIES = ["PHP", "USD", "EUR", "GBP", "SGD", "USDT"]
 
 
 class CurrencyService:
@@ -115,7 +115,7 @@ class CurrencyService:
         to_currency = to_wallet.currency
 
         if from_currency == to_currency:
-            raise ValueError("Source and target currencies must be different")
+            raise ValueError("Source and target currencies must be the same currency")
 
         if from_wallet.available_balance < from_amount:
             raise ValueError(
@@ -201,31 +201,55 @@ class CurrencyService:
 
     async def set_rate_override(
         self,
-        currency_pair: str,
-        override_rate: float,
-        reason: str,
-        created_by: str,
+        *args,
+        currency_pair: Optional[str] = None,
+        override_rate: Optional[float] = None,
+        reason: Optional[str] = None,
+        created_by: Optional[str] = None,
         expires_at: Optional[datetime] = None,
+        from_currency: Optional[str] = None,
+        to_currency: Optional[str] = None,
     ) -> ExchangeRateOverride:
         """Set an admin override for an exchange rate.
-        
-        Args:
-            currency_pair: Currency pair (e.g., "USDT_PHP")
-            override_rate: Override rate to use
-            reason: Reason for override
-            created_by: Admin user ID
-            expires_at: Optional expiration time
-        
-        Returns:
-            ExchangeRateOverride record
+
+        This method supports both the current keyword-based API and the older
+        positional API used by the multi-currency tests.
         """
+        if currency_pair is not None:
+            pair = currency_pair
+            rate_value = override_rate
+            reason_value = reason or "manual_override"
+            created_by_value = created_by or "system"
+            expires_at_value = expires_at
+        elif from_currency is not None and to_currency is not None:
+            pair = self._build_currency_pair(from_currency, to_currency)
+            rate_value = override_rate
+            reason_value = reason or "manual_override"
+            created_by_value = created_by or "system"
+            expires_at_value = expires_at
+        elif len(args) == 5:
+            from_currency_arg, to_currency_arg, rate_value_arg, expires_at_arg, created_by_arg = args
+            pair = self._build_currency_pair(from_currency_arg, to_currency_arg)
+            rate_value = float(rate_value_arg)
+            reason_value = reason or "manual_override"
+            created_by_value = created_by_arg
+            expires_at_value = expires_at_arg
+        else:
+            raise TypeError("set_rate_override expected either (currency_pair, override_rate, reason, created_by, expires_at) or (from_currency, to_currency, override_rate, expires_at, created_by)")
+
+        if rate_value is None:
+            raise ValueError("override_rate is required")
+
         now = datetime.now(timezone.utc)
+        from_currency, to_currency = self._split_currency_pair(pair)
         override = ExchangeRateOverride(
-            currency_pair=currency_pair,
-            override_rate=override_rate,
-            reason=reason,
-            created_by=created_by,
-            expires_at=expires_at,
+            currency_pair=pair,
+            from_currency=from_currency,
+            to_currency=to_currency,
+            override_rate=float(rate_value),
+            reason=reason_value,
+            created_by=created_by_value or "system",
+            expires_at=expires_at_value,
             created_at=now,
             updated_at=now,
         )
@@ -233,13 +257,13 @@ class CurrencyService:
         await self.db.flush()
 
         logger.info(
-            f"Rate override set for {currency_pair}: {override_rate} "
-            f"(reason: {reason})"
+            f"Rate override set for {pair}: {rate_value} "
+            f"(reason: {reason_value})"
         )
 
         # Record in history
         await self._record_rate_history(
-            currency_pair, override_rate, f"admin_override:{reason}"
+            pair, float(rate_value), f"admin_override:{reason_value}"
         )
 
         return override
@@ -365,14 +389,26 @@ class CurrencyService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
+    @staticmethod
+    def _build_currency_pair(from_currency: str, to_currency: str) -> str:
+        return f"{from_currency.upper()}_{to_currency.upper()}"
+
+    @staticmethod
+    def _split_currency_pair(currency_pair: str) -> Tuple[str, str]:
+        parts = currency_pair.split("_", 1)
+        return (parts[0].upper(), parts[1].upper()) if len(parts) == 2 else (currency_pair.upper(), currency_pair.upper())
+
     async def _record_rate_history(
         self, currency_pair: str, rate: float, source: str
     ) -> None:
         """Record rate in history for analytics."""
         try:
             now = datetime.now(timezone.utc)
+            from_currency, to_currency = self._split_currency_pair(currency_pair)
             history = ExchangeRateHistory(
                 currency_pair=currency_pair,
+                from_currency=from_currency,
+                to_currency=to_currency,
                 rate=rate,
                 provider="system",
                 source=source,

@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     railway_project_id: str = ""    # set by Railway
     railway_public_domain: str = "" # set by Railway for the public HTTPS URL
     render: str = ""                # set by Render (e.g. "true")
-    environment: str = "production" # general application environment flag
+    environment: str = "development" # general application environment flag
 
     # AWS Lambda Configuration
     is_lambda: bool = False
@@ -191,25 +191,60 @@ class Settings(BaseSettings):
                 object.__setattr__(self, field, val.strip())
         return self
 
-    @model_validator(mode="after")
-    def generate_jwt_secret_if_missing(self) -> "Settings":
-        """Auto-generate a random JWT secret when JWT_SECRET_KEY is not configured.
+    @staticmethod
+    def _looks_like_placeholder(value: str) -> bool:
+        if not value:
+            return True
+        text = value.strip().lower()
+        if not text:
+            return True
+        placeholder_markers = (
+            "your_",
+            "your-",
+            "your ",
+            "placeholder",
+            "changeme",
+            "replace_me",
+            "replace-me",
+            "example",
+            "secret_key_here",
+            "token_here",
+            "<",
+            ">",
+            "changeme",
+        )
+        return any(marker in text for marker in placeholder_markers)
 
-        In production, this will log a CRITICAL warning as it invalidates sessions on restart.
+    @model_validator(mode="after")
+    def validate_runtime_configuration(self) -> "Settings":
+        """Enforce non-placeholder values for critical secrets in production.
+
+        Local development remains resilient: a temporary JWT secret is generated when
+        the value is missing, but production must use explicit non-placeholder settings.
         """
+        is_production = str(self.environment or "").strip().lower() in {"production", "prod", "live"}
+
         if not self.jwt_secret_key:
+            if is_production:
+                raise ValueError("JWT_SECRET_KEY must be set to a non-placeholder secret in production")
             self.jwt_secret_key = secrets.token_hex(32)
-            if self.environment == "production":
-                logger.critical(
-                    "!!! SECURITY WARNING: JWT_SECRET_KEY is not configured in PRODUCTION !!! "
-                    "A temporary random secret has been generated. ALL SESSIONS WILL BE INVALIDATED ON RESTART. "
-                    "Please set JWT_SECRET_KEY in your environment variables immediately."
-                )
-            else:
-                logger.warning(
-                    "JWT_SECRET_KEY is not configured. A temporary random secret has been "
-                    "generated for this session. Tokens will be invalidated on restart."
-                )
+            logger.warning(
+                "JWT_SECRET_KEY is not configured. A temporary random secret has been "
+                "generated for this session. Tokens will be invalidated on restart."
+            )
+        elif self._looks_like_placeholder(self.jwt_secret_key):
+            if is_production:
+                raise ValueError("JWT_SECRET_KEY must be set to a non-placeholder secret in production")
+            logger.warning("JWT_SECRET_KEY looks like a placeholder; generating a temporary value for this session")
+            self.jwt_secret_key = secrets.token_hex(32)
+
+        if not self.telegram_bot_token:
+            if is_production:
+                raise ValueError("TELEGRAM_BOT_TOKEN must be set in production")
+        elif self._looks_like_placeholder(self.telegram_bot_token):
+            if is_production:
+                raise ValueError("TELEGRAM_BOT_TOKEN must be set to a non-placeholder value in production")
+
         return self
 
     @property

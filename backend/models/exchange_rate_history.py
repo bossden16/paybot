@@ -1,5 +1,8 @@
-from core.database import Base
+from __future__ import annotations
+
 from sqlalchemy import Column, DateTime, Float, Index, Integer, String
+
+from core.database import Base
 
 
 class ExchangeRateHistory(Base):
@@ -17,6 +20,8 @@ class ExchangeRateHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True, nullable=False)
     currency_pair = Column(String, nullable=False)  # e.g., "USDT_PHP", "USD_EUR"
+    from_currency = Column(String, nullable=False, default="", server_default="")
+    to_currency = Column(String, nullable=False, default="", server_default="")
     rate = Column(Float, nullable=False)  # Exchange rate (e.g., 56.75 for USDT→PHP)
     provider = Column(String, nullable=False)  # Source: "coingecko", "yahoo_finance", "manual"
     source = Column(String, nullable=True)  # Additional context (e.g., API endpoint, override reason)

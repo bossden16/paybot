@@ -84,7 +84,45 @@ These steps help contributors get the project running locally and understand the
    - `cd frontend && pnpm install`
 
 ### Start development servers
-Use the repo's starter script to run backend and frontend together:
+
+#### Option 1: Quick Start (Recommended)
+For a simpler, more reliable startup experience, use the new `start-dev.sh` script:
+
+```bash
+bash start-dev.sh
+```
+
+This script:
+- Checks Python and Node prerequisites
+- Sets up a Python virtual environment in `backend/.venv`
+- Installs all Python and Node dependencies
+- Creates `.env` files from templates (if missing)
+- Starts both backend (port 8000) and frontend (port 5173)
+- Shows live logs from both services
+
+#### Option 2: Manual Setup
+If you prefer to set up manually:
+
+1. Install dependencies:
+   ```bash
+   bash bootstrap.sh
+   ```
+
+2. Start backend:
+   ```bash
+   cd backend
+   source .venv/bin/activate
+   uvicorn main:app --reload --port 8000
+   ```
+
+3. Start frontend (in a new terminal):
+   ```bash
+   cd frontend
+   pnpm dev
+   ```
+
+#### Option 3: Legacy Script
+For the original complex startup with advanced configuration:
 
 ```bash
 bash start_app_v2.sh

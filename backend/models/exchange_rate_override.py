@@ -1,5 +1,8 @@
-from core.database import Base
+from __future__ import annotations
+
 from sqlalchemy import Column, DateTime, Float, Index, Integer, String
+
+from core.database import Base
 
 
 class ExchangeRateOverride(Base):
@@ -15,6 +18,8 @@ class ExchangeRateOverride(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True, nullable=False)
     currency_pair = Column(String, nullable=False)  # e.g., "USDT_PHP", "USD_EUR"
+    from_currency = Column(String, nullable=False, default="", server_default="")
+    to_currency = Column(String, nullable=False, default="", server_default="")
     override_rate = Column(Float, nullable=False)  # Manually set rate
     reason = Column(String, nullable=True)  # Why the override was applied
     
@@ -24,3 +29,7 @@ class ExchangeRateOverride(Base):
     
     created_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def rate(self) -> float:
+        return self.override_rate

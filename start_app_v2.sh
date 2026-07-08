@@ -202,6 +202,52 @@ find_available_port() {
     exit 1
 }
 
+ensure_backend_virtualenv() {
+    local backend_dir=$1
+    local python_bin=""
+
+    if command -v python3 >/dev/null 2>&1; then
+        python_bin=$(command -v python3)
+    elif command -v python >/dev/null 2>&1; then
+        python_bin=$(command -v python)
+    else
+        log_error "Python 3 is required but was not found"
+        exit 1
+    fi
+
+    local venv_dir="$backend_dir/.venv"
+    local venv_python="$venv_dir/bin/python"
+
+    if [ ! -x "$venv_python" ]; then
+        log_info "Creating backend virtual environment with $python_bin"
+        "$python_bin" -m venv "$venv_dir"
+    fi
+
+    if [ ! -x "$venv_python" ]; then
+        log_error "Unable to create backend virtual environment at $venv_dir"
+        exit 1
+    fi
+
+    log_info "Installing backend dependencies into $venv_dir"
+    "$venv_python" -m pip install --upgrade pip setuptools wheel
+    "$venv_python" -m pip install -r "$backend_dir/requirements.txt"
+    "$venv_python" -m pip install -r "$backend_dir/requirements.default"
+}
+
+install_frontend_dependencies() {
+    local frontend_dir=$1
+    local package_manager=$2
+
+    log_info "Installing frontend dependencies with $package_manager"
+    if [ "$package_manager" = "pnpm" ]; then
+        (cd "$frontend_dir" && pnpm install --frozen-lockfile)
+        (cd "$frontend_dir" && pnpm install @metagptx/web-sdk@latest --no-save)
+    else
+        (cd "$frontend_dir" && npm install --no-audit --no-fund)
+        (cd "$frontend_dir" && npm install --no-save @metagptx/web-sdk@latest)
+    fi
+}
+
 # Wait for backend health endpoint to be ready
 wait_for_backend_health() {
     local max_attempts=60
@@ -1206,28 +1252,12 @@ main() {
     
     # Backend setup
     log_info "Setting up Backend..."
-    cd "$BACKEND_DIR"
-    
-    # Activate virtual environment and install dependencies
-    export UV_VENV_CLEAR=1
-    if [ "$LOCAL_MODE" = true ]; then
-        uv venv
-        source .venv/bin/activate
-        uv pip install  -r requirements.txt -i http://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com || true
-        uv pip install  -r requirements.default -i http://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com
-    else
-        uv pip install  -r requirements.txt || true
-        uv pip install  -r requirements.default
-    fi
+    ensure_backend_virtualenv "$BACKEND_DIR"
     
     # Pre-install frontend dependencies
     log_info "Pre-installing frontend dependencies..."
-    cd "$FRONTEND_DIR"
-    $PACKAGE_MANAGER install
-    $PACKAGE_MANAGER install @metagptx/web-sdk@latest
+    install_frontend_dependencies "$FRONTEND_DIR" "$PACKAGE_MANAGER"
     log_success "Frontend dependencies installed successfully"
-    
-    cd "$BACKEND_DIR"
     
     if [ "$NO_START" = false ]; then
         # Start both services with retry mechanism

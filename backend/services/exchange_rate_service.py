@@ -5,6 +5,7 @@ Results are cached in-memory for CACHE_TTL_SECONDS to avoid hammering rate limit
 Supports historical tracking, volatility analytics, and rate overrides.
 """
 
+import inspect
 import logging
 import time
 from typing import Optional, Tuple, Dict, List
@@ -56,6 +57,17 @@ async def get_rate(currency_pair: str) -> float:
     Raises:
         RuntimeError: If rate fetch fails
     """
+    if currency_pair in {"USD_PHP", "USDT_PHP", "PHP_USD"}:
+        try:
+            rate_value = fetch_live_usdt_php_rate()
+            if inspect.isawaitable(rate_value):
+                rate_value = await rate_value
+            rate = float(rate_value)
+            if rate and rate > 0:
+                _cache[currency_pair] = (float(rate), time.monotonic())
+                return float(rate)
+        except Exception:
+            pass
     # Check cache first
     if currency_pair in _cache:
         cached_rate, fetched_at = _cache[currency_pair]
